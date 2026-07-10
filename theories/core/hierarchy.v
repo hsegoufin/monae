@@ -1323,6 +1323,7 @@ HB.mixin Record isMonadUnion (S : UU0) (M : UU0 -> UU0)
   findfind : forall (A : UU0) i (k : I -> I -> M A),
     eqvM (find i >>= fun r => find i >>= k r)
           (find i >>= fun r => k r r) ;
+  findskip : forall i, (find i >> skip) ≈ skip ;
   unionfind :forall i j, eqvM (union i j >> find i) (union i j >> find j) ;
   findunion : forall i j, eqvM (find j >>= union i) (union i j) ;
   findunionfind : forall i j u,
@@ -1341,7 +1342,7 @@ HB.structure Definition MonadUnion (S : UU0) :=
   { M of isMonadUnion S M & }.
 
 HB.mixin Record isMonadUnionFail (S : UU0) (M : UU0 -> UU0)
-    of MonadUnion S M & MonadFail M := {
+    of MonadUnion S M & MonadFailR0 M := {
   neqfind : I -> I -> M unit;
   neqfindE : forall a b, neqfind a b =
     (find a >>= fun a' => find b >>= fun b':I =>  @guard M (a' != b'));
@@ -1353,6 +1354,155 @@ HB.mixin Record isMonadUnionFail (S : UU0) (M : UU0 -> UU0)
 #[short(type=unionFailMonad)]
 HB.structure Definition MonadUnionFail (S : UU0) :=
   { M of isMonadUnionFail S M &  }.
+
+Section derived.
+Variables (S : UU0) (M : unionFailMonad S).
+Open Scope do_notation.
+
+Lemma findguard A a (k : I -> M A) :
+  (do a1 <- find a; do a2 <- find a; guard (a1 == a2) >> k a1) ≈ find a >>= k.
+Proof.
+rewrite findfind.
+by under eq_bind do rewrite eqxx guardT bindskipf.
+Qed.
+
+Lemma assert_unit (s : failMonad) (f : unit -> bool) :
+  @assert s _ f = fun=> guard (f tt).
+Proof. by apply: boolp.funext => -[]; rewrite assertE bindmskip. Qed.
+
+Lemma equiv_union a b i j :
+  (union i j >> do a' <- find a; do b' <- find b; @guard M (a' == b')) ≈ 
+  do a' <- find a; do b' <- find b; do i' <- find i; do j' <- find j;
+  union i' j' >>
+  guard ((a' == b') || (a' == i') && (b' == j') || (a' == j') && (b' == i')).
+Proof.
+rewrite -bindA -findunionfind bindA.
+under eq_bind do rewrite bindA.
+setoid_rewrite findC at 1.
+under eq_bind do rewrite -bindA.
+setoid_rewrite <- findunionfind.
+under eq_bind do rewrite bindA.
+setoid_rewrite <-findguard.
+apply: bindfeqv => a1.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+rewrite -bindA.
+under eq_bind do rewrite !bindA.
+rewrite findC -findguard.
+symmetry.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+under eq_bind do rewrite !bindA.
+rewrite findC -findguard.
+apply: bindfeqv => b1.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+symmetry.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+under eq_bind => b2.
+  rewrite bindA.
+  under eq_bind => a2.
+  rewrite !bindA.
+  under eq_bind => ?.
+  under eq_bind => b'.
+  rewrite bindA.
+  under eq_bind => a'.
+  rewrite !assert_unit -!guard_and andbA; over.
+  over. over. over. over.
+symmetry.
+under eq_bind => b2.
+  rewrite bindA.
+  under eq_bind => a2.
+  rewrite !bindA.
+  under eq_bind => i'.
+  rewrite bindA.
+  under eq_bind => j'.
+  rewrite bindA.
+  rewrite !assert_unit -!guard_and andbA; over.
+  over. over. over.
+case/boolP: (a1 == b1) => /= [/eqP|] ab.
+  rewrite -ab.
+  symmetry.
+  apply: bindfeqv => b2; apply: bindfeqv => a2.
+  setoid_rewrite (@findfind S M unit a1).
+  under eq_bind do under eq_bind do rewrite eqxx /=.
+  symmetry.
+  under eq_bind do rewrite -bindA.
+  rewrite -bindA.
+  have ffu : (find i >>= (fun x : I => find j >>= union x)) ≈ @union _ M i j.
+    setoid_rewrite findunion.
+    setoid_rewrite unionSymm.
+    by rewrite findunion unionSymm.
+  setoid_rewrite ffu.
+  symmetry.
+  under eq_bind do rewrite -(bindskipf (guard _)) -bindA.
+  setoid_rewrite findskip.
+  by under eq_bind do rewrite bindskipf.
+setoid_rewrite <- findunion at 2.
+have -> : union i = fun j => union i j by [].
+setoid_rewrite unionSymm at 2.
+setoid_rewrite <- findunion at 2.
+symmetry.
+setoid_rewrite (findC _ j i).
+under eq_bind do under eq_bind do rewrite bindA.
+under eq_bind do under eq_bind do under eq_bind do rewrite bindA.
+setoid_rewrite unionSymm at 1.
+setoid_rewrite (@findC S M unit a i).
+setoid_rewrite (@findC S M unit a j).
+setoid_rewrite (@findC S M unit b i).
+setoid_rewrite (@findC S M unit b j).
+setoid_rewrite <- findguard.
+apply: bindfeqv => i1.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+under eq_bind do rewrite bindA.
+symmetry.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+under eq_bind do rewrite bindA.
+setoid_rewrite findC.
+setoid_rewrite <- findguard.
+apply: bindfeqv => j1.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+under eq_bind do rewrite !bindA.
+under eq_bind do under eq_bind do rewrite !bindA.
+under eq_bind do under eq_bind do under eq_bind do rewrite !bindA.
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  rewrite !bindA.
+symmetry.
+under eq_bind do (rewrite guardsC; last exact: bindmfail).
+under eq_bind do rewrite !bindA.
+under eq_bind do under eq_bind do rewrite !bindA.
+under eq_bind do under eq_bind do under eq_bind do rewrite !bindA.
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  rewrite !bindA.
+case/boolP: ((a1 == i1) && _) => [/andP[] /eqP ai /eqP bj | aibj] /=.
+  rewrite ai bj in ab *.
+  apply: bindfeqv => {}j.
+  apply: bindfeqv => {}i.
+  apply: bindfeqv => {}b.
+  apply: bindfeqv => {}a.
+  rewrite -bindA -(unionfind i1 j1) !bindA.
+  under eq_bind do under eq_bind do rewrite bindA.
+  setoid_rewrite (@findfind S M unit i1).
+  under eq_bind do under eq_bind do rewrite eqxx /=.
+  under eq_bind do rewrite -(bindskipf (guard _)) !bindA -(bindA (find i1)).
+  setoid_rewrite findskip.
+  by rewrite bindskipf.
+case/boolP: ((a1 == j1) && _) => [/andP[] /eqP aj /eqP bi | ajbi] /=.
+  rewrite aj bi in ab *.
+  apply: bindfeqv => {}j.
+  apply: bindfeqv => {}i.
+  apply: bindfeqv => {}b.
+  apply: bindfeqv => {}a.
+  rewrite -bindA (unionfind i1 j1) !bindA.
+  under eq_bind do under eq_bind do rewrite bindA.
+  setoid_rewrite (@findfind S M unit j1).
+  under eq_bind do under eq_bind do rewrite eqxx /=.
+  under eq_bind do rewrite -(bindskipf (guard _)) !bindA -(bindA (find j1)).
+  setoid_rewrite findskip.
+  by rewrite bindskipf.
+rewrite guardF.
+symmetry.
+under eq_bind do under eq_bind do rewrite !bindfailf.
+rewrite !bindmfail.
+symmetry.
+Abort.
 End UnionFind.
 HB.export UnionFind.
 
