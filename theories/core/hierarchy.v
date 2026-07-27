@@ -1343,13 +1343,16 @@ HB.structure Definition MonadUnion (S : UU0) :=
   { M of isMonadUnion S M & }.
 
 HB.mixin Record isMonadUnionFail (S : UU0) (M : UU0 -> UU0)
-    of MonadUnion S M & MonadFailR0 M := {
+    of MonadUnion S M & MonadFail M := {
   neqfind : I -> I -> M unit;
   neqfindE : forall a b, neqfind a b =
     (find a >>= fun a' => find b >>= fun b':I =>  @guard M (a' != b'));
   unionfind_neq : forall A i j a (k : I -> M A), 
     eqvM (neqfind a i>>neqfind a j>> union i j>> find a>>= k )
         (neqfind a i>> neqfind a j>> find a >>= fun a'=> union i j>> k a'); 
+  unionfindguard : forall A i j (m : M A) , 
+    union i j >> m  ≈
+    find i >>= fun i' => find j >>= fun j' => union i j >> find i >>= fun i0=>  guard ( (i' == i0) || (j' == i0)) >> m;
 }.
 
 #[short(type=unionFailMonad)]

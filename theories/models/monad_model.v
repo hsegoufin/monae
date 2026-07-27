@@ -2712,6 +2712,8 @@ Proof. rewrite /union -!monadMbind /=; apply liftXequiv; exact: (@unionC S (Mode
 Let find_lookup A i (m : M A): (find i>> m) ≈ m.
 Proof. exact: (@find_lookup S (ModelUnion.acto S)). Qed.
 
+
+
 HB.instance Definition _ := isMonadUnion.Build
   S acto  
   findfind 
@@ -2766,6 +2768,16 @@ Proof.
   by [].
   by [].
 Qed.
+
+Let unionfindguard A i j (m : M A):
+    union i j >> m  ≈
+    find i >>= fun i' => find j >>= fun j' => union i j >> find i >>= fun i0=>  guard ( (i' == i0) || (j' == i0)) >> m.
+Proof.
+  apply eq_is_bisim.
+Abort.
+
+
+
 (* TODO new model with FailR0
 HB.instance Definition _ := isMonadUnionFail.Build
   S acto  
