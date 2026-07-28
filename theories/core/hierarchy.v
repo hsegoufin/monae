@@ -1321,21 +1321,21 @@ HB.mixin Record isMonadUnion (S : UU0) (M : UU0 -> UU0)
   find : I -> M I ;
   union : I -> I -> M unit ;
   findfind : forall (A : UU0) i (k : I -> I -> M A),
-    eqvM (find i >>= fun r => find i >>= k r)
-          (find i >>= fun r => k r r) ;
-  unionfind :forall i j, eqvM (union i j >> find i) (union i j >> find j) ;
-  findunion : forall i j, eqvM (find j >>= union i) (union i j) ;
+    (find i >>= fun r => find i >>= k r) ≈
+    (find i >>= fun r => k r r) ;
+  unionfind : forall i j, (union i j >> find i) ≈ (union i j >> find j) ;
+  findunion : forall i j, (find j >>= union i) ≈ (union i j) ;
   findunionfind : forall i j u,
-    eqvM (find u >>= fun v => union i j >> find v) (union i j >> find u) ;
-  union_id : forall i, eqvM (union i i) skip ;
+    (find u >>= fun v => union i j >> find v) ≈ (union i j >> find u) ;
+  union_refl : forall i, union i i ≈ skip ;
   findC : forall (A : UU0) i j (k : I -> I -> M A),
-    eqvM  (find i >>= fun u => find j >>= k u)
-          (find j >>= fun v => find i >>= k ^~ v) ;
-  unionSymm : forall i j, eqvM (union i j) (union j i) ;
+    (find i >>= fun u => find j >>= k u) ≈
+    (find j >>= fun v => find i >>= k ^~ v) ;
+  union_sym : forall i j, union i j ≈ union j i;
   unionC : forall i j u v,
-    eqvM (union i j >> union u v) (union u v >> union i j) ;
-  find_lookup : forall A i (m : M A), 
-    eqvM (find i>> m) m;
+    (union i j >> union u v) ≈ (union u v >> union i j) ;
+  findskip : forall i, 
+    (find i>> skip) ≈ skip; (* todo : lemma find >> m ≈ m*)
 }.
 
 #[short(type=unionMonad)]
@@ -1346,13 +1346,13 @@ HB.mixin Record isMonadUnionFail (S : UU0) (M : UU0 -> UU0)
     of MonadUnion S M & MonadFail M := {
   neqfind : I -> I -> M unit;
   neqfindE : forall a b, neqfind a b =
-    (find a >>= fun a' => find b >>= fun b':I =>  @guard M (a' != b'));
-  unionfind_neq : forall A i j a (k : I -> M A), 
-    eqvM (neqfind a i>>neqfind a j>> union i j>> find a>>= k )
-        (neqfind a i>> neqfind a j>> find a >>= fun a'=> union i j>> k a'); 
-  unionfindguard : forall A i j (m : M A) , 
-    union i j >> m  ≈
-    find i >>= fun i' => find j >>= fun j' => union i j >> find i >>= fun i0=>  guard ( (i' == i0) || (j' == i0)) >> m;
+    (find a >>= fun a' => find b >>= fun b' =>  @guard M (a' != b'));
+  findunion_neq : forall A i j a (k : I -> M A), 
+    (neqfind a i >> neqfind a j >> union i j >> find a >>= k) ≈
+    (neqfind a i >> neqfind a j >> find a >>= fun a' => union i j >> k a'); 
+  findunion_eq : forall i j, 
+    (do i' <- find i; do j' <- find j; union i j >> do r <- find i; 
+      @guard M ( (i' == r) || (j' == r)))%Do ≈ union i j;
 }.
 
 #[short(type=unionFailMonad)]

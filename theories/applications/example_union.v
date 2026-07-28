@@ -15,14 +15,14 @@ Local Notation I := hierarchy.UnionFind.I.
 
 Lemma findunionl i j : (find i >>= union ^~ j) ≈ @union S M i j.
 Proof. 
-  by setoid_rewrite unionSymm;  rewrite findunion.
+  by setoid_rewrite union_sym;  rewrite findunion.
 Qed.
 
 Lemma finddup A i m : (find i >>= fun x => find x >>= m  : M A) ≈ find i >>= m.
 Proof.
-  rewrite -{2}(bindskipf (find i)) -(union_id i) -findunionfind !bindA.
+  rewrite -{2}(bindskipf (find i)) -(union_refl i) -findunionfind !bindA.
   apply: bindfeqv => a.
-  by rewrite -{1}(bindskipf (find a)) -(union_id i).
+  by rewrite -{1}(bindskipf (find a)) -(union_refl i).
 Qed.
 
 Lemma uniondup i j : union i j >> union i j ≈ (union i j : M unit).
@@ -31,7 +31,7 @@ Proof.
   setoid_rewrite <-bindA.
   rewrite unionfind  bindA.
   setoid_rewrite findunionl.
-  setoid_rewrite union_id.
+  setoid_rewrite union_refl.
   by rewrite bindmskip. 
 Qed.
 
@@ -42,18 +42,10 @@ Proof.
   by apply: bindmeqv.
 Qed.
 
-(* not sure it is the right way to go *)
-Lemma find_eq a i :  find a ≈ (find i : M I) -> neqfind a i ≈ (fail : M unit).
-Proof.
-  move=> Heq.
-  rewrite neqfindE Heq findfind.
-  under eq_bind => x.
-  have H := @erefl I x.
-  move/eqP in H; rewrite H=>/=.
-  rewrite guardF.
-  over.
-  by rewrite find_lookup.
+Lemma find_lookup: forall A i (m : M A), (find i >> m) ≈ m.
+  by move=>A i m;rewrite -(bindskipf m) -{2}(findskip i) bindA.
 Qed.
+
 End extra_rules.
 
 Section equivLaws.
@@ -81,15 +73,6 @@ Proof.
   by rewrite findfind;
   apply: bindfeqv=>{}a0;
   rewrite eqxx guardT bindskipf.
-Qed.
-
-Lemma rewrite_under A B C (d1 d2 : M B) (f : M C) (g : B -> M A) : 
-  d1 ≈ (d2 : M B) -> 
-  (f >>= fun x => d1 >>= g : M A) ≈ f >>= fun x => d2 >>= g.
-Proof.
-  by move=> Heq;
-  apply: bindfeqv=>_;
-  apply: bindmeqv. 
 Qed.
 
 Lemma guardfindC A b a (f: I -> M A): 
@@ -173,7 +156,7 @@ Proof.
     apply bind_ext_guard_equiv=>_.
     by rewrite bindskipf.
   symmetry.
-  rewrite guardF !bindfailf -{1}(find_lookup _ a fail).
+  rewrite guardF !bindfailf -{1}(find_lookup _ _ _ a fail).
   apply: bindfeqv=>a0.
   case (a' == a0).
   by rewrite guardT bindskipf bindfailf.
@@ -188,53 +171,27 @@ Proof.
   under eq_bind do under eq_bind do under eq_bind do rewrite !bindA.
   symmetry.
   under eq_bind do rewrite !bindA.
-  (* reapeat use of findC and guardfindC *)
-Admitted. 
-
-Lemma find_neqfindC A i a j (m : I -> M A): 
-(find i >>= (fun i1  => (neqfind a j >> m i1))) ≈
-( neqfind a j >> (find i >>= m)).
-Proof.
-    rewrite neqfindE !bindA.
-    under eq_bind=>i1.
-    rewrite !bindA.
-    under eq_bind=>x.
-    rewrite !bindA.
-    1,2 : over.
-    rewrite (findC _ i a).
-    apply: bindfeqv=>{}a1.
-    rewrite (findC _ i j).
-    rewrite !bindA.
-    apply: bindfeqv=>{}j1.
-    case (a1 != j1 ).
-    - rewrite guardT !bindskipf.
-      apply: bindfeqv=>{}i1.
-      by rewrite bindskipf.
-    - rewrite guardF !bindfailf.
-    rewrite -(find_lookup _ i fail).
-    apply: bindfeqv=>{}i1.
-    by rewrite bindfailf.
+  rewrite (bindfeqv (fun a0 => bindfeqv (fun x => guardfindC _ (a0 != x) i _))).
+  rewrite  (bindfeqv (fun=>findC _ _ i _)) findC.
+  apply:bindfeqv=>{}i0.
+  do 2 (rewrite guardfindC;apply: bindfeqv=>?).
+  by rewrite guardC.
 Qed.
 
-Lemma new_law i j: 
-(union i j : M unit) ≈
-find i >>= fun i' => find j >>= fun j' => union i j >> find i >>= fun i0=>  guard ( (i' == i0) || (j' == i0) ).
-Proof.
-Admitted.
+Definition findchk a a' : M unit :=
+  find a >>= fun a0 => guard (a' == a0).
 
 Lemma union_axiom_neqcase a' a b' b i' i j' j : 
 a' != b' -> a' != i' -> a' != j' ->
-(find b >>= (fun a1=> guard (b' == a1) >> (find a >>= (fun x=> guard (a' == x) >> (find j >>= (fun x0=> guard (j' == x0) >> (find i >>= (fun x1=> guard (i' == x1) >> (union i' j' >> guard false)))))))) : M unit) ≈ 
-(find b >>= (fun a1=> guard (b' == a1) >> (find a >>= (fun x=> guard (a' == x) >> (find j >>= (fun x0=> guard (j' == x0) >> (find i >>= (fun x1=> guard (i' == x1) >> (union i' j' >> (find b' >>= (fun b'0 : I => find a' >>= (fun a'0 : I => guard (a'0 == b'0))))))))))))).
+(findchk b b' >> (findchk a a' >> (findchk j j' >> (findchk i i' >> (union i' j' >> @fail M _))))) ≈ 
+(findchk b b' >> (findchk a a' >> (findchk j j' >> (findchk i i' >> (union i' j' >> (find b' >>= (fun b'0 : I => find a' >>= (fun a'0 : I => guard (a'0 == b'0))))))))).
 Proof.
-  move=> Hab Hai Haj. 
+  move=> Hab Hai Haj.
+  rewrite /findchk ! bindA. 
   (* first add neqfinds for a*)
-  rewrite -!(bindA (find b))  !(bindfeqv (fun _ => find_guard_exch _ a a' j j' _)).
-  do 2 rewrite -bindA.
-  symmetry;do 2 rewrite -bindA;symmetry.
+  rewrite -!(bindA (find b))  !(bindfeqv (fun _ => find_guard_exch _ a a' j j' _)) !bindA.
   setoid_rewrite (add_neqfind _ a a' i i' _ Hai).
-  rewrite !bindA -bindA.
-    symmetry;rewrite -bindA;symmetry.
+  do 2 (rewrite -bindA;symmetry).
   rewrite !(bindfeqv (fun _ => find_guard_exch _ j j' _ _ _)).
   rewrite -!(bindA (find a) _ _).
   rewrite !(bindfeqv (fun _ => (bindfeqv (fun _ => find_guard_exch _ j j' i i' _)))).
@@ -249,7 +206,7 @@ Proof.
   symmetry.
   do 8 rewrite -bindA.
   under eq_bind do do 2 rewrite -bindA.
-  setoid_rewrite unionfind_neq.
+  setoid_rewrite findunion_neq.
   rewrite !bindA.
   (* supress neqfind once used*)
   do 8 setoid_rewrite findgard_neqfindC.
@@ -270,27 +227,37 @@ Proof.
       apply bind_ext_guard_equiv=>/eqP Hb0.
       (*test to see*)
       rewrite (find_guard_exch _ i).
-      rewrite -bindA.
-      rewrite (bindfeqv (fun=> find_guard_exch _ j j' _ _ _)).
-      rewrite bindA.
+      rewrite -bindA (bindfeqv (fun=> find_guard_exch _ j j' _ _ _)) bindA.
       rewrite  (find_guard_exch _ i i' a a' _).
       apply:bindfeqv=>a0.
       apply bind_ext_guard_equiv=>/eqP Ha0.
-      do 3 rewrite -bindA.
-      symmetry; do 3 rewrite -bindA; symmetry.
-      have H := bindfeqv (fun=> bindmeqv _ _ _ _ _ (new_law i' j')).
-      rewrite !H !bindA.
-      clear H.
-      under eq_bind=>x. under eq_bind=>u. under eq_bind=>u1. rewrite !bindA.
-      under eq_bind=>u2. rewrite !bindA. 
-      1, 2, 3, 4: over.
-      under eq_bind do rewrite !bindA.
-      setoid_rewrite (findC _ i' j' (fun u1 u2 => union i' j' >> (find i' >>=(fun x0 : I =>guard ((u1 == x0) || (u2 == x0)) >>_)))).
+      setoid_rewrite <-(findunion_eq i' j').
+      rewrite !bindA.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      rewrite !bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      1, 2, 3, 4, 5, 6, 7 : over.
+      setoid_rewrite (findC _ i' j' (fun u1 u2 => union i' j' >> (find i' >>=(fun r : I =>guard ((u1 == r) || (u2 == r)) >>_)))).
+
       symmetry.
-      under eq_bind=>x. under eq_bind=>u. under eq_bind=>u1. rewrite !bindA.
-      under eq_bind=>u2. rewrite !bindA. 
-      1, 2, 3, 4: over.
-      under eq_bind do rewrite !bindA.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      rewrite !bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      1, 2, 3, 4, 5, 6, 7 : over.
       setoid_rewrite (findC _ i' j' (fun u1 u2 => union i' j' >> (find i' >>= (fun x0 : I =>guard ((u1 == x0) || (u2 == x0)) >> guard false)))).
       setoid_rewrite (finddupguard _ j j').
       setoid_rewrite (pushfind _ j).
@@ -316,21 +283,32 @@ Proof.
       rewrite  (find_guard_exch _ i i' a a' _).
       apply:bindfeqv=>a0.
       apply bind_ext_guard_equiv=>/eqP Ha0.
-      do 3 rewrite -bindA.
-      symmetry; do 3 rewrite -bindA; symmetry.
-      have H := bindfeqv (fun=> bindmeqv _ _ _ _ _ (new_law j' i')).
-      setoid_rewrite unionSymm.
-      rewrite !H !bindA.
-      clear H.
-      under eq_bind=>x. under eq_bind=>u. under eq_bind=>u1. rewrite !bindA.
-      under eq_bind=>u2. rewrite !bindA. 
-      1, 2, 3, 4: over.
-      under eq_bind do rewrite !bindA. 
+      setoid_rewrite union_sym.
+      setoid_rewrite <-(findunion_eq j' i').
+      rewrite !bindA.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      rewrite !bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      1, 2, 3, 4, 5, 6, 7 : over.
       symmetry.
-      under eq_bind=>x. under eq_bind=>u. under eq_bind=>u1. rewrite !bindA.
-      under eq_bind=>u2. rewrite !bindA. 
-      1, 2, 3, 4: over.
-      under eq_bind do rewrite !bindA.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      under eq_bind=>?.
+      rewrite !bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      under eq_bind=>?.
+      rewrite bindA.
+      1, 2, 3, 4, 5, 6, 7 : over.
       setoid_rewrite (finddupguard _ j j').
       setoid_rewrite (pushfind _ j).
       rewrite !finddupguard.
@@ -376,7 +354,7 @@ Proof.
     do 3 setoid_rewrite <-(findgard_neqfindC _ _ _ b' i').
     do 7 rewrite -bindA.
     under eq_bind do do 2 rewrite -bindA.
-    rewrite (bindfeqv (fun=>unionfind_neq _ _ _ _ _)).
+    rewrite (bindfeqv (fun=>findunion_neq _ _ _ _ _)).
     under eq_bind do rewrite !bindA.
     rewrite !bindA.
     under eq_bind do rewrite !bindA.
@@ -397,17 +375,14 @@ Proof.
     by rewrite (negbTE Hab).
 Qed.
 
-Lemma union_axiom  (i j a b: I):
-(union i j >> find a >>= fun a' => find b >>= fun b' => guard (a' == b'): M unit )≈
+Lemma union_classes (i j a b: I):
+(union i j >> find a >>= fun a' => find b >>= fun b' => @guard M (a' == b') )≈
 find a >>= fun a' => find b >>= fun b' => find i >>= fun i' => find j >>= fun j' => 
 union i' j' >> guard ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).
 Proof.
-(* ### Seaction i & j ###*)
-    setoid_rewrite <-(findunionl S M i j).
-  have : (find i >>= union^~ j ≈ (find i >>=(fun i'=> find j >>= union i'):M unit)).
-  - apply: bindfeqv=>{}i'; symmetry;exact: findunion.
-  move=>H.
-  setoid_rewrite H.
+  setoid_rewrite <-(findunionl S M i j).
+  have ->: find i >>= union^~ j ≈ find i >>= fun i' => find j >>= union i'
+    by move=>*;apply: bindfeqv=>{}i'; symmetry;exact: findunion.
   rewrite bindA.
   setoid_rewrite (findC _ b i).
   setoid_rewrite (findC _ a i).
@@ -485,72 +460,28 @@ Proof.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
       by rewrite guardT find_lookup.
-  -  rewrite !bindA. 
-    case /norP: Hb => [Hb0 /nandP Hb1].
-    case /norP: Hb0 => Hb0 Hb2.
-    case: Hb1 => Hb1.
-    move: Hb2.
-    case /boolP : (a' == i') => Ha1 /= Hbj; last first.
-    +  by rewrite union_axiom_neqcase.
-    + have Ha2 : (b' != i') by move /eqP in Ha1;rewrite -Ha1 eq_sym.
+  - rewrite !bindA. 
+    case /norP: Hb => /norP [Hb0].
+    case /boolP: (a' == i') => Hai /= Hbj; case /boolP : (a' == j') => Haj /= Hbi.
+    + rewrite !(find_guard_exch _ b b' a a' _).
+      rewrite -!(bindA (find _)) union_axiom_neqcase //; last by rewrite eq_sym.
+      setoid_rewrite (findC _ b' a' _).
+      do 7 apply/bindfeqv=>?.
+      by rewrite eq_sym.
+    + have Ha2 : (b' != i') by move /eqP in Hai;rewrite -Hai eq_sym.
       rewrite !(find_guard_exch _ b b' a a' _).
-      rewrite union_axiom_neqcase.
+      rewrite -!(bindA (find _)) union_axiom_neqcase //; last by rewrite eq_sym.
       setoid_rewrite (findC _ b' a' _).
-      apply:bindfeqv=>a1.
-      apply bind_ext_guard_equiv=>H1.
-      apply:bindfeqv=>b1.
-      apply bind_ext_guard_equiv=>H2.
-      apply:bindfeqv=>j1.
-      apply bind_ext_guard_equiv=>Hj.
-      apply:bindfeqv=>i1.
-      apply bind_ext_guard_equiv=>Hi.
-      apply:bindfeqv=>_.
-      apply:bindfeqv=>a2.
-      apply:bindfeqv=>b2.
-      case Hyp : (a2 == b2);by rewrite eq_sym in Hyp; rewrite Hyp.
-      2, 3: by [].
-      by apply /eqP /nesym /eqP.
-    case /nandP: Hb2 => Hb2. (* symmetric of first bullet, rewrite to be better *)
-    + case Ha1 : (a' == j'). 
-      * have Hb3 : (b' != j') by move /eqP in Ha1;rewrite -Ha1 eq_sym.
+      do 7 apply/bindfeqv=>?.
+      by rewrite eq_sym.    
+    + have Hb3 : (b' != j') by move /eqP in Haj;rewrite -Haj eq_sym.
       rewrite !(find_guard_exch _ b b' a a' _).
-      rewrite union_axiom_neqcase.
+      rewrite -!(bindA (find _)) union_axiom_neqcase //; last by rewrite eq_sym.
       setoid_rewrite (findC _ b' a' _).
-      apply:bindfeqv=>a1.
-      apply bind_ext_guard_equiv=>H1.
-      apply:bindfeqv=>b1.
-      apply bind_ext_guard_equiv=>H2.
-      apply:bindfeqv=>j1.
-      apply bind_ext_guard_equiv=>Hj.
-      apply:bindfeqv=>i1.
-      apply bind_ext_guard_equiv=>Hi.
-      apply:bindfeqv=>_.
-      apply:bindfeqv=>a2.
-      apply:bindfeqv=>b2.
-      case Hyp : (a2 == b2);by rewrite eq_sym in Hyp; rewrite Hyp.
-      2, 3: by [].
-      by apply /eqP /nesym /eqP.
-      * move/eqP /eqP in Ha1.
-        by rewrite union_axiom_neqcase.
-    +  rewrite !(find_guard_exch _ b b' a a' _).
-      rewrite union_axiom_neqcase.
-      setoid_rewrite (findC _ b' a' _).
-      apply:bindfeqv=>a1.
-      apply bind_ext_guard_equiv=>H1.
-      apply:bindfeqv=>b1.
-      apply bind_ext_guard_equiv=>H2.
-      apply:bindfeqv=>j1.
-      apply bind_ext_guard_equiv=>Hj.
-      apply:bindfeqv=>i1.
-      apply bind_ext_guard_equiv=>Hi.
-      apply:bindfeqv=>_.
-      apply:bindfeqv=>a2.
-      apply:bindfeqv=>b2.
-      case Hyp : (a2 == b2);by rewrite eq_sym in Hyp; rewrite Hyp.
-      2, 3: by [].
-      by apply /eqP /nesym /eqP.
-Qed. (* todo factorize similar proof in a lemma*)
-
+      do 7 apply/bindfeqv=>?.
+      by rewrite eq_sym.
+    + by rewrite -!(bindA (find _)) union_axiom_neqcase.
+Qed.
 
 Definition union_iter  (l : seq (I*I)) : M unit  := 
   foldM (fun _  p => union p.1 p.2) tt l.
