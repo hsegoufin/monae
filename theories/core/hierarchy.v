@@ -1316,7 +1316,7 @@ HB.structure Definition MonadPlusArray (S : UU0) (I : eqType) :=
 Module UnionFind.
 Local Definition I := nat.
 
-HB.mixin Record isMonadUnion (S : UU0) (M : UU0 -> UU0)
+HB.mixin Record isMonadUnion (M : UU0 -> UU0)
     of MonadEquiv M:= {
   find : I -> M I ;
   union : I -> I -> M unit ;
@@ -1339,11 +1339,11 @@ HB.mixin Record isMonadUnion (S : UU0) (M : UU0 -> UU0)
 }.
 
 #[short(type=unionMonad)]
-HB.structure Definition MonadUnion (S : UU0) :=
-  { M of isMonadUnion S M & }.
+HB.structure Definition MonadUnion :=
+  { M of isMonadUnion M & }.
 
-HB.mixin Record isMonadUnionFail (S : UU0) (M : UU0 -> UU0)
-    of MonadUnion S M & MonadFail M := {
+HB.mixin Record isMonadUnionFail (M : UU0 -> UU0)
+    of MonadUnion M & MonadFail M := {
   neqfind : I -> I -> M unit;
   neqfindE : forall a b, neqfind a b =
     (find a >>= fun a' => find b >>= fun b' =>  @guard M (a' != b'));
@@ -1356,8 +1356,8 @@ HB.mixin Record isMonadUnionFail (S : UU0) (M : UU0 -> UU0)
 }.
 
 #[short(type=unionFailMonad)]
-HB.structure Definition MonadUnionFail (S : UU0) :=
-  { M of isMonadUnionFail S M &  }.
+HB.structure Definition MonadUnionFail :=
+  { M of isMonadUnionFail M &  }.
 End UnionFind.
 HB.export UnionFind.
 

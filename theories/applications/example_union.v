@@ -10,10 +10,10 @@ Local Open Scope monae_scope.
 Arguments bindfeqv {s A B f g d}.
 
 Section extra_rules.
-Context (S:UU0) (M: unionFailMonad S).
+Context (M: unionFailMonad).
 Local Notation I := hierarchy.UnionFind.I.
 
-Lemma findunionl i j : (find i >>= union ^~ j) ≈ @union S M i j.
+Lemma findunionl i j : (find i >>= union ^~ j) ≈ @union M i j.
 Proof. 
   by setoid_rewrite union_sym;  rewrite findunion.
 Qed.
@@ -35,21 +35,16 @@ Proof.
   by rewrite bindmskip. 
 Qed.
 
-Lemma union_eq : forall a i j, find a ≈ (find j :M I) -> (union i a : M unit) ≈ union i j.
-Proof.
-  move=> a i j Hfind.
-  rewrite -findunion -findunion.
-  by apply: bindmeqv.
-Qed.
+Lemma union_eq a i j: find a ≈ (find j :M I) -> (union i a : M unit) ≈ union i j.
+Proof. by rewrite -findunion -findunion; apply: bindmeqv. Qed.
 
-Lemma find_lookup: forall A i (m : M A), (find i >> m) ≈ m.
-  by move=>A i m;rewrite -(bindskipf m) -{2}(findskip i) bindA.
-Qed.
+Lemma find_lookup A i (m : M A) : (find i >> m) ≈ m.
+Proof. by rewrite -(bindskipf m) -{2}(findskip i) bindA. Qed.
 
 End extra_rules.
 
 Section equivLaws.
-Context (S:UU0) (M: unionFailMonad S).
+Context (M: unionFailMonad ).
 Local Notation I := hierarchy.UnionFind.I.
 
 (* TODO M more generic + move into lib*)
@@ -63,7 +58,7 @@ Qed.
 End equivLaws.
 
 Section correction_proof.
-Context (S:UU0) (M: unionFailMonad S).
+Context  (M: unionFailMonad).
 Local Notation I := hierarchy.UnionFind.I.
 
 Lemma remember_find  B (a:I) (m :I-> M B): 
@@ -380,7 +375,7 @@ Lemma union_classes (i j a b: I):
 find a >>= fun a' => find b >>= fun b' => find i >>= fun i' => find j >>= fun j' => 
 union i' j' >> guard ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).
 Proof.
-  setoid_rewrite <-(findunionl S M i j).
+  setoid_rewrite <-(findunionl M i j).
   have ->: find i >>= union^~ j ≈ find i >>= fun i' => find j >>= union i'
     by move=>*;apply: bindfeqv=>{}i'; symmetry;exact: findunion.
   rewrite bindA.
