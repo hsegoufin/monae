@@ -1091,9 +1091,8 @@ Let ret A (a:A) := liftX unit (Ret a : ModelUnion.acto A).
 
 Let union_refl i: (union i i) ≈ (skip : M unit).
 Proof.
-  rewrite /union /skip.
-  rewrite liftXequiv; last exact: (@union_refl (ModelUnion.acto)).
-  by [].
+  by rewrite /union /skip liftXequiv; 
+  last exact: (@union_refl (ModelUnion.acto)).
 Qed.
 
 Let findC (A : UU0) i j (k : I -> I -> M A):
