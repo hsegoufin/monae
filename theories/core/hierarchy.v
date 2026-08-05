@@ -1335,7 +1335,7 @@ HB.mixin Record isMonadUnion (M : UU0 -> UU0)
   unionC : forall i j u v,
     (union i j >> union u v) ≈ (union u v >> union i j) ;
   findskip : forall i, 
-    (find i>> skip) ≈ skip; (* todo : lemma find >> m ≈ m*)
+    (find i >> skip) ≈ skip;
 }.
 
 #[short(type=unionMonad)]

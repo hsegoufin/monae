@@ -86,16 +86,16 @@ Proof.
 Qed.
 
 Lemma pushfind B a a' b (m : I ->I-> M B): 
-find a >>= (fun x : I => ((guard (a' == x) >> (find b >>= (fun v : I => m v x))))) ≈
-find b >>= fun v => (find a >>= (fun x : I => (guard (a' == x) >> m v x))).
+  find a >>= (fun x : I => ((guard (a' == x) >> (find b >>= (fun v : I => m v x))))) ≈
+  find b >>= fun v => (find a >>= (fun x : I => (guard (a' == x) >> m v x))).
 Proof.
   rewrite (bindfeqv (fun a => guardfindC (a' == a) b _) ).
   by rewrite findC.
 Qed.
 
 Lemma guardC A b1 b2 (m : M A) : 
-guard b1 >> (guard b2 >> m) ≈ 
-guard b2 >> (guard b1 >> m).
+  guard b1 >> (guard b2 >> m) ≈ 
+  guard b2 >> (guard b1 >> m).
 Proof.
   case b1.
     by rewrite guardT !bindskipf.
@@ -106,8 +106,8 @@ Proof.
 Qed.
 
 Lemma finddupguard A a a'(m : I -> M A): 
-find a >>=(fun a0 : I => (guard (a' == a0) >> (find a' >>= m))) ≈
-find a >>=(fun a0 : I => (guard (a' == a0) >> m a0 )).
+  find a >>=(fun a0 : I => (guard (a' == a0) >> (find a' >>= m))) ≈
+  find a >>=(fun a0 : I => (guard (a' == a0) >> m a0 )).
 Proof.
   have : find a >>= (fun a0 : I => (guard (a' == a0) >> (find a' >>= m))) ≈  find a >>= (fun a0 : I => (guard (a' == a0) >> (find a0 >>= m))).
     apply: bindfeqv=>{}a0.
@@ -217,8 +217,7 @@ Proof.
   rewrite !bindA. under eq_bind do rewrite !bindA.
   (*case analysis*)
   case Hb: ( (b' == i') || (b' == j')).
-  -
-    move/orP in Hb.
+  - move/orP in Hb.
     case Hb => [/eqP Hbi | /eqP Hbj].  
       + rewrite Hbi.
       apply:bindfeqv=>b0.
@@ -421,16 +420,10 @@ Proof.
   do 2 (rewrite remember_find;symmetry).
   apply: bindfeqv=>{}b'.
   case Hb : ((a' == b') || (a' == i') && (b' == j') || (a' == j') && (b' == i')).
-  -  apply: bindfeqv=>{}b0.
-    apply bind_ext_guard_equiv=>H_b0.
-    apply: bindfeqv=>{}a0.
-    apply bind_ext_guard_equiv=>H_a0.
-    apply: bindfeqv=>{}j0.
-    apply bind_ext_guard_equiv=>H_j0.
-    apply: bindfeqv=>{}i0.
-    apply bind_ext_guard_equiv=>H_i0.
-    move /orP in Hb;case: Hb => Hb.
-    move /orP in Hb; case: Hb => Hb.
+  - do 4 (apply: bindfeqv=>?;
+    apply bind_ext_guard_equiv=>_).
+    case /orP: Hb => Hb.
+    case /orP: Hb => Hb.
     + move/eqP in Hb; rewrite Hb.
       rewrite bindA.
       apply: bindfeqv=>{}_.
