@@ -312,18 +312,18 @@ Proof.
     by rewrite (negbTE Hab).
 Qed.
 
-Lemma union_classes (i j a b: I):
-(union i j >> find a >>= fun a' => find b >>= fun b' => @guard M (a' == b') )≈
-find a >>= fun a' => find b >>= fun b' => find i >>= fun i' => find j >>= fun j' => 
-union i' j' >> guard ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).
+Lemma union_classes (i j a b : I):
+ union i j >> (find a >>= fun a' => find b >>= fun b' => @guard M (a' == b')) ≈
+ find a >>= fun a' => find b >>= fun b' =>
+ find i >>= fun i' => find j >>= fun j' => union i' j' >>
+ guard ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).
 Proof.
   setoid_rewrite <-(findunionl M i j).
-  have ->: find i >>= union^~ j ≈ find i >>= fun i' => find j >>= union i'
-    by move=>*;apply: bindfeqv=>{}i'; symmetry;exact: findunion.
+  have -> : find i >>= union^~ j ≈ find i >>= fun i' => find j >>= union i'
+    by move=>*; apply: bindfeqv => i'; rewrite findunion.
   rewrite bindA.
   setoid_rewrite (findC _ b i).
   setoid_rewrite (findC _ a i).
-  rewrite bindA.
   rewrite remember_find.
   symmetry. rewrite (remember_find i);symmetry.
   apply: bindfeqv=>{}i'.
@@ -337,18 +337,17 @@ Proof.
   rewrite bindA.
   do 2 setoid_rewrite (pushfind _ _ a).
   under eq_bind do rewrite bindA.
-  have : 
-  find a >>= (fun a1 : I => find j >>= (fun x : I => guard (j' == x) >> (find i >>= (fun x0 : I => guard (i' == x0) >> (union i' j' >> (find a1 >>= (fun a' : I => find b >>= (fun b' : I => guard (a' == b'))))))))) ≈
-  find a >>= (fun a1 : I => find j >>= (fun x : I => guard (j' == x) >> (find i >>= (fun x0 : I => guard (i' == x0) >> (union i' j' >> (find b >>= (fun b' : I => find a1 >>= (fun a' : I => guard (a' == b'))))))))).
-    by move=> t;
-    apply: bindfeqv=>a0;
-    apply: bindfeqv=>x;
-    apply: bindfeqv=>_;
-    apply: bindfeqv=>x0;
-    apply: bindfeqv=>_;
-    apply: bindfeqv=>_;
-    rewrite findC.
-  move=>->.
+  transitivity
+    (@find M a >>= fun a1 => find j >>= fun x => guard (j' == x) >>
+     (find i >>= fun y => guard (i' == y) >> (union i' j' >>
+      (find b >>= fun b' => find a1 >>= fun a' => guard (a' == b'))))).
+    apply: bindfeqv=>a0.
+    apply: bindfeqv=>x.
+    apply: bindfeqv=>_.
+    apply: bindfeqv=>x0.
+    apply: bindfeqv=>_.
+    apply: bindfeqv=>_.
+    by rewrite findC.
   under eq_bind do rewrite -bindA.
   setoid_rewrite <-findunionfind.
   under eq_bind do rewrite !bindA.
@@ -359,36 +358,31 @@ Proof.
   rewrite !(findC _ _ b).
   do 2 (rewrite remember_find;symmetry).
   apply: bindfeqv=>{}b'.
-  case Hb : ((a' == b') || (a' == i') && (b' == j') || (a' == j') && (b' == i')).
-  - do 4 (apply: bindfeqv=>?;
-    apply bind_ext_guard_equiv=>_).
-    case /orP: Hb => Hb.
-    case /orP: Hb => Hb.
-    + move/eqP in Hb; rewrite Hb.
+  case Hb: ((a' == b') || (a' == i') && (b' == j') || (a' == j') && (b' == i')).
+  - do 4 (apply: bindfeqv=>?; apply bind_ext_guard_equiv=>_).
+    case /orP: Hb => [/orP[] |].
+    + move/eqP ->.
       rewrite bindA.
       apply: bindfeqv=>{}_.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
       by rewrite guardT find_lookup.
-    + move /andP in Hb. 
-      case Hb => [/eqP Hi' /eqP Hj'].
-      rewrite Hi' Hj'.
+    + case/andP => /eqP -> /eqP ->.
       rewrite -unionfind bindA.
       apply: bindfeqv=>{}_.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
       by rewrite guardT find_lookup.
-    + move /andP in Hb. 
-      case Hb => [/eqP Hj' /eqP Hi'].
-      rewrite Hi' Hj'.
+    + case/andP => /eqP -> /eqP ->.
       rewrite unionfind bindA.
-      apply: bindfeqv=>{}_.
+      apply: bindfeqv => _.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
       by rewrite guardT find_lookup.
-  - rewrite !bindA. 
+  - rewrite !bindA.
     case /norP: Hb => /norP [Hb0].
-    case /boolP: (a' == i') => Hai /= Hbj; case /boolP : (a' == j') => Haj /= Hbi.
+    case /boolP: (a' == i') => Hai /= Hbj;
+    case /boolP : (a' == j') => Haj /= Hbi.
     + rewrite !(find_guard_exch b b' a a' _).
       rewrite -!(bindA (find _)) union_axiom_neqcase //; last by rewrite eq_sym.
       setoid_rewrite (findC _ b' a' _).
