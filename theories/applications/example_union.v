@@ -174,10 +174,10 @@ Qed.
 Lemma union_axiom_neqcase a' a b' b i' i j' j : 
   a' != b' -> a' != i' -> a' != j' ->
   findchk b b' (fun=> findchk a a'
-    (fun=> findchk j j' (fun=> findchk i i' (fun=> union i' j' >> fail)))) ≈
+   (fun=> findchk j j' (fun=> findchk i i' (fun=> union i' j' >> Ret false)))) ≈
   findchk b b' (fun=> findchk a a'
     (fun=> findchk j j' (fun=> findchk i i' (fun=> union i' j' >>
-       (find b' >>= fun y => find a' >>= fun x => guard (x == y)))))).
+       (find b' >>= fun y => find a' >>= fun x => Ret (x == y)))))).
 Proof.
   move=> Hab Hai Haj.
   setoid_rewrite (findchkC a a' j j').
@@ -288,10 +288,10 @@ Proof.
 Qed.
 
 Lemma union_classes (i j a b : I):
- union i j >> (find a >>= fun a' => find b >>= fun b' => @guard M (a' == b')) ≈
+ @union M i j >> (find a >>= fun a' => find b >>= fun b' => Ret (a' == b')) ≈
  find a >>= fun a' => find b >>= fun b' =>
  find i >>= fun i' => find j >>= fun j' => union i' j' >>
- guard ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).
+ Ret ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).
 Proof.
   setoid_rewrite <-(findunionl M i j).
   have -> : find i >>= union^~ j ≈ find i >>= fun i' => find j >>= union i'
@@ -314,7 +314,7 @@ Proof.
   transitivity
     (@find M a >>= fun a1 => findchk j j'
       (fun x => findchk i i' (fun y => union i' j' >>
-      (find b >>= fun b' => find a1 >>= fun a' => guard (a' == b'))))).
+      (find b >>= fun b' => find a1 >>= fun a' => Ret (a' == b'))))).
     by setoid_rewrite (findC _ b).
   under eq_bind do rewrite -bindA.
   setoid_rewrite <-findunionfind.
@@ -335,19 +335,19 @@ Proof.
       apply: bindfeqv => _.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
-      by rewrite guardT find_lookup.
+      by rewrite find_lookup.
     + case/andP => /eqP -> /eqP ->.
       rewrite -bindA -unionfind bindA.
       apply: bindfeqv => _.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
-      by rewrite guardT find_lookup.
+      by rewrite find_lookup.
     + case/andP => /eqP -> /eqP ->.
       rewrite -bindA unionfind bindA.
       apply: bindfeqv => _.
       rewrite findfind.
       under eq_bind do rewrite eqxx.
-      by rewrite guardT find_lookup.
+      by rewrite find_lookup.
   - case /norP: Hb => /norP [Hb0].
     case /boolP: (a' == i') => Hai /= Hbj;
     case /boolP : (a' == j') => Haj /= Hbi.
