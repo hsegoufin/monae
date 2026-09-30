@@ -1058,10 +1058,9 @@ HB.instance Definition _ := isMonadUnion.Build
   unionC
   findskip.
 
-Let neqfind a b := (find a >>= fun a' => find b >>= fun b' =>  @guard M (a' != b')).
+Let neqfind a b := eqfind M a b >>= (guard \o negb).
 
-Let neqfindE : forall a b, neqfind a b =
-    (find a >>= fun a' => find b >>= fun b':I =>  @guard M (a' != b')).
+Let neqfindE : forall a b, neqfind a b = eqfind M a b >>= (guard \o negb).
 Proof. by []. Qed.
 
 Lemma find_unchanged_union_eq f i j a:
@@ -1083,11 +1082,11 @@ Let findunion_neq A  i j a (k : I-> M A ):
   (neqfind a i>>neqfind a j>> union i j>> find a >>= k) ≈
   (neqfind a i>> neqfind a j>> find a >>= fun a'=> union i j>> k a').
 Proof.
-  rewrite neqfindE.
+  rewrite !neqfindE.
   apply eq_is_bisim, boolp.eq_exist, boolp.funext => f/=.
-  case Hi : (find_rec f a != find_rec f i) => //=.
-  case Hj : (find_rec f a != find_rec f j) => //=.
-  by move/eqP in Hi; move/eqP in Hj;rewrite find_unchanged_union_eq.
+  case/boolP: (find_rec f a == find_rec f i) => //= /eqP Hi.
+  case/boolP: (find_rec f a == find_rec f j) => //= /eqP Hj.
+  by rewrite find_unchanged_union_eq.
 Qed.
 
 Let findunion_eq i j: 

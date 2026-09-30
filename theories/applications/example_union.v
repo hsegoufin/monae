@@ -115,7 +115,7 @@ by rewrite (bindfeqv (fun x => finddup _ _)) findfind.
 Qed.
 
 Ltac normalize_bindA :=
-  rewrite ?bindA;
+  rewrite ?(bindA,bindretf);
   try (under eq_bind => ?; [normalize_bindA; over |]).
 
 Lemma add_neqfind A a a' i i' (m : M A) : 
@@ -134,7 +134,7 @@ apply: bind_eqv_guard => /eqP <-.
 rewrite findchkfind.
 apply: bindfeqv => i1.
 apply: bind_eqv_guard => /eqP <-.
-by rewrite Hdiff guardT bindskipf.
+by rewrite /comp Hdiff guardT bindskipf.
 Qed.
 
 Lemma findchkC A a a' j j' (k : I -> I -> M A) :
@@ -288,7 +288,7 @@ Proof.
 Qed.
 
 Lemma union_classes (i j a b : I):
- @union M i j >> (find a >>= fun a' => find b >>= fun b' => Ret (a' == b')) ≈
+ union i j >> eqfind M a b ≈
  find a >>= fun a' => find b >>= fun b' =>
  find i >>= fun i' => find j >>= fun j' => union i' j' >>
  Ret ((a' == b') || ((a' == i') && (b' == j')) || ((a' == j') && (b' == i'))).

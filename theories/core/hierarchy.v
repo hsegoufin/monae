@@ -1323,11 +1323,13 @@ HB.mixin Record isMonadUnion (M : UU0 -> UU0)
 HB.structure Definition MonadUnion :=
   { M of isMonadUnion M & }.
 
+Definition eqfind (M : unionMonad) a b :=
+  @find M a >>= fun a' => find b >>= fun b' => Ret (a' == b').
+
 HB.mixin Record isMonadUnionFail (M : UU0 -> UU0)
     of MonadUnion M & MonadFail M := {
   neqfind : I -> I -> M unit;
-  neqfindE : forall a b, neqfind a b =
-    (find a >>= fun a' => find b >>= fun b' =>  @guard M (a' != b'));
+  neqfindE : forall a b, neqfind a b = @eqfind M a b >>= (guard \o negb);
   findunion_neq : forall A i j a (k : I -> M A), 
     (neqfind a i >> neqfind a j >> union i j >> find a >>= k) ≈
     (neqfind a i >> neqfind a j >> find a >>= fun a' => union i j >> k a'); 
