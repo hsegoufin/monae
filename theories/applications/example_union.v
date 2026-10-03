@@ -17,11 +17,17 @@ Local Notation I := hierarchy.UnionFind.I.
 Lemma findunionl i j : (find i >>= union ^~ j) ≈ @union M i j.
 Proof. by setoid_rewrite union_sym; rewrite findunion. Qed.
 
-Lemma finddup A i m : (find i >>= fun x => find x >>= m  : M A) ≈ find i >>= m.
+Lemma finddup A i m :
+  (find i >>= fun x => find x >>= m x : M A) ≈ find i >>= fun x => m x x.
 Proof.
-  rewrite -{2}(bindskipf (find i)) -(union_refl i) -findunionfind !bindA.
-  apply: bindfeqv => a.
-  by rewrite -{1}(bindskipf (find a)) -(union_refl i).
+rewrite -findfind.
+rewrite -[eqvLHS](findfind _ i (fun i1 i2 => find i2 >>= m i1)).
+rewrite [eqvRHS]findC.
+rewrite -{3}(bindskipf (find i)) -(union_refl i) -findunionfind !bindA.
+setoid_rewrite union_refl.
+setoid_rewrite bindretf.
+rewrite findC.
+by setoid_rewrite (findC _ i _ m).
 Qed.
 
 Lemma uniondup i j : @union M i j >> union i j ≈ union i j.
@@ -371,18 +377,338 @@ Proof.
     + by rewrite union_axiom_neqcase.
 Qed.
 
-Definition union_iter  (l : seq (I*I)) : M unit  := 
+Definition union_iter (l : seq (I*I)) : M unit :=
   foldM (fun _  p => union p.1 p.2) tt l.
 
-Definition lookup_vertex  n (l :n.-tuple (I*I)) (p : 'I_n*bool) :=
+Definition lookup_vertex n (l : n.-tuple (I*I)) (p : 'I_n * bool) :=
   let p' := tnth l p.1 in if p.2 then p'.1 else p'.2.
+(*Arguments lookup_vertex : clear implicits.*)
 
-Definition exist_path n (l : n.-tuple (I*I)) a b (p: n.-bseq ('I_n*bool)) (p0 : 'I_n*bool) :=
-(a == b) || (a == lookup_vertex l p0) && path (fun r s => lookup_vertex l s == lookup_vertex l (r.1, negb r.2)) p0 p && (b == lookup_vertex l (last p0 p)). 
+Definition adjacent (l : seq (I * I)) a b :=
+  ((a,b) \in l) || ((b,a) \in l).
 
-Lemma union_iteration n (l : n.-tuple (I*I)) a b p p0:
-(union_iter l >> find a >>= fun a' => find b >>= fun b' => Ret (a' == b') : M bool) ≈
-find a >>= fun a' => find b >>= fun b' => union_iter l >> Ret ( exist_path l a' b' p p0).
+Definition exists_path n (l : n.-tuple (I*I)) a b :=
+  [exists p : n.-bseq ('I_n * bool),
+      path (adjacent l) a (map (lookup_vertex l) p) &&
+      (last a (map (lookup_vertex l) p) == b)].
+
+Lemma foldM_rcons R T (f : R -> T -> M R) x s z :
+  foldM f x (rcons s z) = foldM f x s >>= f ^~ z.
 Proof.
+elim: s x => [|y s IH] /= x.
+  by rewrite bindmret bindretf.
+rewrite bindA; exact: eq_bind.
+Qed.
+
+(*
+Definition find_pairs (l : seq (I * I)) : M (seq (I * I)) :=
+  foldM (fun l '(a,b) =>
+           find a >>= fun a' => find b >>= fun b' => Ret (rcons l (a',b')))
+        nil l.
+
+Lemma size_find_pairs l :
+  find_pairs l = find_pairs l >>= assert (fun l' => size l' == size l).
+Proof.
+rewrite /find_pairs.
+rewrite -{3}(cats0 l).
+elim: l nil => [| [i j] l IH] nl /=.
+  by rewrite bindretf assertE eqxx bindretf.
+rewrite !bindA.
+apply: eq_bind => i'.
+rewrite !bindA.
+apply: eq_bind => j'.
+rewrite !bindretf [LHS]IH.
+apply: eq_bind => l'.
+by rewrite !assertE !size_cat size_rcons addnS.
+Qed.
+*)
+
+Fixpoint mapM_tuple (s : monad) A B n (f : A -> s B) (l : n.-tuple A) :
+  s (n.-tuple B).
+revert l; case n.
+  move=> _.
+  exact (Ret [tuple]).
+move=> m [] [] // a l /= Hsz.
+refine (f a >>= fun b => mapM_tuple s A B m f (Tuple Hsz) >>= fun l' => _).
+exact (Ret [tuple of b :: l']).
+Defined.
+
+Lemma mapM_tuple_cat (s : monad) A B n m (f : A -> s B) (l1 : n.-tuple A) (l2 : m.-tuple A) :
+  (mapM_tuple f [tuple of l1 ++ l2]) =
+  (do l1' <- mapM_tuple f l1; do l2' <- mapM_tuple f l2;
+                              Ret [tuple of l1' ++ l2'])%Do.
+Proof.
+elim: n l1 => [[] [] //= H0 | n IH [] [] // a' l1 Hl].
+  rewrite bindretf /=.
+  under eq_bind => l2'. rewrite (_ : Ret _ = Ret l2'); first over.
+    congr Ret. exact: val_inj.
+  rewrite bindmret.
+  congr mapM_tuple; exact: val_inj.
+have Hl' : size l1 == n by [].
+have -> : [tuple of Tuple Hl ++ l2] = [tuple of a' :: Tuple Hl' ++ l2].
+  exact: val_inj.
+rewrite /= bindA.
+apply: eq_bind => b' /=.
+rewrite bindA.
+under [RHS]eq_bind do rewrite bindretf.
+rewrite (_ : Tuple _ = [tuple of Tuple Hl' ++ l2]); last by exact: val_inj.
+rewrite IH bindA /=.
+under eq_bind do rewrite bindA.
+under eq_bind do under eq_bind do rewrite bindretf /=.
+congr (mapM_tuple _ _ >>= _).
+  exact: val_inj.
+apply: boolp.funext => l1'.
+apply: eq_bind => l2'.
+congr Ret; exact: val_inj.
+Qed.
+
+Lemma mapM_tuple_rcons (s : monad) A B n (f : A -> s B) (l : n.-tuple A) a :
+  (mapM_tuple f [tuple of rcons l a]) =
+  (do l' <- mapM_tuple f l; do b <- f a; Ret [tuple of rcons l' b])%Do.
+Proof.
+Abort.
+
+Definition find_pairs n : n.-tuple (I * I) -> M (n.-tuple (I * I)) :=
+  mapM_tuple (fun '(i,j) => do i' <- find i; do j' <- find j; Ret (i',j'))%Do.
+
+Lemma find_pairsC A n a (l : n.-tuple _) (k : _ -> _ -> M A) :
+  (find a >>= fun a' => find_pairs l >>= k a') ≈
+  (find_pairs l >>= fun l' => find a >>= k ^~ l').
+Proof.
+rewrite /find_pairs.
+elim: n l k => [[] [] //= H0 | n IH [] [] //= [i j] l Hl] k.
+  rewrite bindretf.
+  by under eq_bind do rewrite bindretf.
+normalize_bindA.
+rewrite findC.
+setoid_rewrite (findC _ a).
+setoid_rewrite IH.
+symmetry.
+by normalize_bindA.
+Qed.
+
+Lemma find_pairs_dup A n (l : n.-tuple _) (k : _ -> _ -> M A) :
+  (find_pairs l >>= fun l' => find_pairs l' >>= k l') ≈
+  (find_pairs l >>= fun l' => k l' l').
+Proof.
+rewrite /find_pairs.
+elim: n l k => [[] [] //= H0 | n IH [] [] //= [i j] l Hl] k.
+  by rewrite !bindretf.
+normalize_bindA.
+rewrite -!/(find_pairs _).
+do 2 setoid_rewrite <-find_pairsC.
+rewrite findC.
+setoid_rewrite finddup.
+rewrite findC.
+setoid_rewrite finddup.
+rewrite -!/(@find_pairs n) /= in IH *.
+under eq_bind do under eq_bind do under eq_bind => l' do
+  have -> : Tuple (valP l') = l' by exact: val_inj.
+apply: bindfeqv => i'.
+normalize_bindA.
+symmetry.
+normalize_bindA.
+apply: bindfeqv => j'.
+by rewrite -(IH (Tuple Hl) (fun x y => k [tuple of _ :: x] [tuple of _ :: y])).
+Qed.
+
+Lemma find_union_iter_find (l : seq (I * I)) u :
+  (find u >>= fun v => union_iter l >> find v) ≈ (union_iter l >> find u).
+Proof.
+elim/last_ind: l => [| l [i j] IH].
+  rewrite /union_iter /= bindretf.
+  under eq_bind do rewrite bindretf.
+  have := finddup u (fun x y => Ret y : M I).
+  rewrite bindmret => Hdup.
+  rewrite -[eqvRHS]Hdup.
+  apply: bindfeqv => v.
+  by rewrite bindmret.
+rewrite /union_iter /= foldM_rcons /= !bindA.
+under eq_bind do rewrite bindA.
+setoid_rewrite <-findunionfind.
+rewrite -[eqvRHS]bindA -IH.
+rewrite bindA.
+apply: bindfeqv => v.
+by rewrite bindA.
+Qed.
+
+Lemma union_iteration n (l : n.-tuple (I*I)) a b :
+  (union_iter l >> eqfind M a b) ≈
+  (find_pairs l >>= fun l => find a >>= fun a' => find b >>= fun b' =>
+   union_iter l >> Ret (exists_path l a' b')).
+Proof.
+elim: n l a b => [[] [] //= H0 | n IH [l Hl]] a b /=.
+  rewrite /union_iter bindretf /exists_path.
+  normalize_bindA.
+  apply: bindfeqv => a'.
+  apply: bindfeqv => b'.
+  rewrite (_ : [exists _, _] = (a' == b')) //.
+  apply/existsP => /=.
+  case: ifP => ab.
+    by exists [::].
+  case => -[] [] //=.
+  by rewrite ab.
+case: l Hl => // c l.
+(* reverse *)
+rewrite (lastI c l) -cats1 -addn1 => Hl.
+rewrite /union_iter.
+rewrite {1}cats1 foldM_rcons -/(union_iter _) bindA.
+setoid_rewrite union_classes.
+have Hl' : size (belast c l) == n by rewrite cats1 size_rcons addn1 in Hl.
+(* a' == b' *)
+setoid_rewrite <-(findfind _ b
+  (fun b' b1 => _ >>= fun i' => _ >>= fun j' =>
+    union i' j' >> Ret ((_ == b') || _ && (b1 == _) || _ && (b1 == _)))).
+setoid_rewrite <-(findfind _ a
+  (fun a' a1 => _ >>= fun b' => _ >>= fun b1 => _ >>= fun i' => _ >>= fun j' =>
+    union i' j' >> Ret ((a' == _) || (a1 == _) && _ || (a1 == _) && _))).
+setoid_rewrite (findC _ a b).
+under eq_bind do under eq_bind => a' do under eq_bind => b' do
+  rewrite -(bindretf (a' == b')
+    (fun e => _ >>= fun a1 => _ >>= fun b1 => _ >>= fun i' => _ >>= fun j' =>
+       _ >> Ret (e || _ || _))).
+rewrite -bindA.
+under eq_bind do rewrite -bindA.
+rewrite -bindA.
+rewrite [X in X >>= _]bindA.
+rewrite (IH (Tuple Hl')).
+normalize_bindA.
+(* a' == i' *)
+setoid_rewrite <-(findfind _ a
+  (fun a1 a2 => _ >>= fun b1 => _ >>= fun i' => _ >>= fun j' =>
+    union i' j' >> Ret (_ || (a1 == _) && _ || (a2 == _) && _))).
+set i := (last c l).
+setoid_rewrite <-(findfind _  i.1
+  (fun i1 i2 => _ >>= fun j' =>
+    union i2 j' >> Ret (_ || (_ == i1) && _ || _ && (_ == i2)))).
+do 2 setoid_rewrite (findC _ _ i.1).
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind => a' do under eq_bind => i1 do
+  rewrite -(bindretf (a' == i1)
+    (fun e => _ >>= fun a1 => _ >>= fun b1 => _ >>= fun i' => _ >>= fun j' =>
+       _ >> Ret (_ || e && _ || _))).
+under eq_bind => l'. under eq_bind => a'. under eq_bind => b'.
+  rewrite -bindA.
+  under eq_bind do rewrite -bindA.
+  rewrite -bindA.
+  rewrite [X in X >>= _]bindA.
+over. over. over.
+setoid_rewrite (IH _ a i.1).
+normalize_bindA.
+do ! setoid_rewrite find_pairsC.
+rewrite find_pairs_dup.
+setoid_rewrite (findC _ b a).
+setoid_rewrite findfind.
+(* a' == j' *)
+setoid_rewrite <-(findfind _  i.2
+  (fun j1 j2 => union _ j2 >> Ret (_ || _ && (_ == j2) || (_ == j1) && _))).
+do 2 setoid_rewrite (findC _ _ i.2).
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do under eq_bind => a' do under eq_bind => j1 do
+  rewrite -(bindretf (a' == j1)
+    (fun e => _ >>= fun b1 => _ >>= fun i' => _ >>= fun j' =>
+      _ >> Ret (_ || _ || e && _ ))).
+under eq_bind => l'. under eq_bind => a'. under eq_bind => b'.
+under eq_bind => i'.
+  rewrite -bindA.
+  under eq_bind do rewrite -bindA.
+  rewrite -bindA.
+  rewrite [X in X >>= _]bindA.
+over. over. over. over.
+setoid_rewrite (IH _ a i.2).
+normalize_bindA.
+do ! setoid_rewrite find_pairsC.
+rewrite find_pairs_dup.
+do 2 setoid_rewrite (findC _ _ a).
+setoid_rewrite findfind.
+(* b' == i' *)
+setoid_rewrite <-(findfind _ b
+  (fun b1 b2 => _ >>= fun i' => _ >>= fun j' =>
+    union i' j' >> Ret (_ || _ && (b2 == _) || _ && (b1 == _)))).
+setoid_rewrite <-(findfind _  i.1
+  (fun i1 i2 => _ >>= fun j' => union i2 j' >> Ret (_ || _ || _ && (_ == i1)))).
+setoid_rewrite (findC _ b i.1 (fun _ _ => find i.1 >>= _)).
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do under eq_bind do under eq_bind => b' do under eq_bind => i1
+  do rewrite -(bindretf (b' == i1)
+    (fun e => _ >>= fun b1 => _ >>= fun i' => _ >>= fun j' =>
+      _ >> Ret (_ || _ || _ && e))).
+under eq_bind => l'. under eq_bind => a'. under eq_bind => b'.
+under eq_bind => i1. under eq_bind => j2.
+  rewrite -bindA.
+  under eq_bind do rewrite -bindA.
+  rewrite -bindA.
+  rewrite [X in X >>= _]bindA.
+over. over. over. over. over.
+setoid_rewrite (IH _ b i.1).
+normalize_bindA.
+do ! setoid_rewrite find_pairsC.
+rewrite find_pairs_dup.
+setoid_rewrite (findC _ i.2 b).
+setoid_rewrite (findC _ i.1 b).
+setoid_rewrite findfind.
+setoid_rewrite (findC _ i.2 i.1).
+setoid_rewrite findfind.
+(* b' == j' *)
+setoid_rewrite <-(findfind _ i.2
+  (fun j1 j' => union _ j' >> Ret (_ || _ && (_ == j1) || _))).
+setoid_rewrite (findC _ i.1 i.2 (fun _ _ => find i.2 >>= _)).
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do under eq_bind do under eq_bind => b' do under eq_bind => j1
+  do rewrite -(bindretf (b' == j1)
+    (fun e => _ >>= fun i' => _ >>= fun j' => _ >> Ret (_ || _ && e || _))).
+under eq_bind => l'. under eq_bind => a'. under eq_bind => b'.
+under eq_bind => i1. under eq_bind => j2.
+  rewrite -bindA.
+  under eq_bind do rewrite -bindA.
+  rewrite -bindA.
+  rewrite [X in X >>= _]bindA.
+over. over. over. over. over.
+setoid_rewrite (IH _ b i.2).
+normalize_bindA.
+do ! setoid_rewrite find_pairsC.
+rewrite find_pairs_dup.
+setoid_rewrite (findC _ i.2 b).
+setoid_rewrite (findC _ i.1 b).
+setoid_rewrite findfind.
+setoid_rewrite findfind.
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do rewrite -bindA.
+setoid_rewrite <- find_union_iter_find.
+normalize_bindA.
+setoid_rewrite (findC _ i.2 i.1).
+setoid_rewrite findfind.
+setoid_rewrite (findC _ _ _ (fun x y => union x y >> _)).
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do rewrite -bindA.
+setoid_rewrite <- find_union_iter_find.
+normalize_bindA.
+setoid_rewrite findfind.
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do under eq_bind do under eq_bind do rewrite -bindA.
+setoid_rewrite findunionl.
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do under eq_bind do rewrite -bindA.
+setoid_rewrite findunion.
+under eq_bind do under eq_bind do under eq_bind do under eq_bind do
+  under eq_bind do rewrite -bindA.
+do ! setoid_rewrite (findC _ _ i.2).
+do ! setoid_rewrite (findC _ _ i.1).
+rewrite /find_pairs.
+have -> : Tuple Hl = [tuple of Tuple Hl' ++ [tuple last c l]].
+  exact: val_inj.
+rewrite mapM_tuple_cat /= -/(@find_pairs n) bindA -/i.
+rewrite [in eqvRHS](surjective_pairing i).
+apply: bindfeqv => l'.
+rewrite !bindA.
+apply: bindfeqv => i'.
+rewrite !bindA.
+apply: bindfeqv => j'.
+rewrite !bindretf.
+apply: bindfeqv => a'.
+apply: bindfeqv => b'.
+rewrite /= {1}cats1 foldM_rcons /= -/(union_iter l').
+apply: bindfeqv => _.
+(* Now just need to solve the graph problem *)
 Abort.
 End correction_proof.
