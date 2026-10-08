@@ -40,7 +40,7 @@ theories/applications/example_typed_store.v
 theories/applications/smallstep.v
 theories/applications/example_transformer.v
 theories/applications/symfingraph.v
-theories/applications/example_unionfind.v
+theories/applications/example_union.v
 theories/applications/counterexample_altconvexdr.v
 theories/applications/category_ext.v
 theories/all_monae.v

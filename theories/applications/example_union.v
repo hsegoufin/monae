@@ -389,29 +389,6 @@ elim: s x => [|y s IH] /= x.
 rewrite bindA; exact: eq_bind.
 Qed.
 
-(*
-Definition find_pairs (l : seq (I * I)) : M (seq (I * I)) :=
-  foldM (fun l '(a,b) =>
-           find a >>= fun a' => find b >>= fun b' => Ret (rcons l (a',b')))
-        nil l.
-
-Lemma size_find_pairs l :
-  find_pairs l = find_pairs l >>= assert (fun l' => size l' == size l).
-Proof.
-rewrite /find_pairs.
-rewrite -{3}(cats0 l).
-elim: l nil => [| [i j] l IH] nl /=.
-  by rewrite bindretf assertE eqxx bindretf.
-rewrite !bindA.
-apply: eq_bind => i'.
-rewrite !bindA.
-apply: eq_bind => j'.
-rewrite !bindretf [LHS]IH.
-apply: eq_bind => l'.
-by rewrite !assertE !size_cat size_rcons addnS.
-Qed.
-*)
-
 Fixpoint mapM_tuple (s : monad) A B n (f : A -> s B) (l : n.-tuple A) :
   s (n.-tuple B).
 revert l; case n.
@@ -450,12 +427,6 @@ apply: boolp.funext => l1'.
 apply: eq_bind => l2'.
 congr Ret; exact: val_inj.
 Qed.
-
-Lemma mapM_tuple_rcons (s : monad) A B n (f : A -> s B) (l : n.-tuple A) a :
-  (mapM_tuple f [tuple of rcons l a]) =
-  (do l' <- mapM_tuple f l; do b <- f a; Ret [tuple of rcons l' b])%Do.
-Proof.
-Abort.
 
 Definition find_pairs n : n.-tuple (I * I) -> M (n.-tuple (I * I)) :=
   mapM_tuple (fun '(i,j) => do i' <- find i; do j' <- find j; Ret (i',j'))%Do.
