@@ -25,6 +25,7 @@ theories/models/typed_store_model.v
 theories/models/delay_model.v
 theories/models/elgot_model.v
 theories/models/typed_store_transformer.v
+theories/models/unionfind_model.v
 theories/applications/monad_composition.v
 theories/applications/example_fastprod.v
 theories/applications/example_spark.v
@@ -38,6 +39,8 @@ theories/applications/typed_store_universe.v
 theories/applications/example_typed_store.v
 theories/applications/smallstep.v
 theories/applications/example_transformer.v
+theories/applications/symfingraph.v
+theories/applications/example_unionfind.v
 theories/applications/counterexample_altconvexdr.v
 theories/applications/category_ext.v
 theories/all_monae.v
