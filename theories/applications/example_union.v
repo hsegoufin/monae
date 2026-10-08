@@ -10,6 +10,58 @@ Unset Printing Implicit Defensive.
 
 Local Open Scope monae_scope.
 
+Section mapM.
+Variable M : monad.
+
+Lemma foldM_rcons R T (f : R -> T -> M R) x s z :
+  foldM f x (rcons s z) = foldM f x s >>= f ^~ z.
+Proof.
+elim: s x => [|y s IH] /= x.
+  by rewrite bindmret bindretf.
+rewrite bindA; exact: eq_bind.
+Qed.
+
+Variables (A B : UU0) (f : A -> M B).
+
+Fixpoint mapM_tuple n : n.-tuple A -> M (n.-tuple B).
+case n.
+  move=> _; exact (Ret [tuple]).
+move=> m t.
+case t => [] [] // a l /= Hsz.
+refine (f a >>= fun b => mapM_tuple m (Tuple Hsz) >>= fun l' => _).
+exact (Ret [tuple of b :: l']).
+Defined.
+
+Lemma mapM_tuple_cat n m (l1 : n.-tuple A) (l2 : m.-tuple A) :
+  (mapM_tuple [tuple of l1 ++ l2]) =
+  (do l1' <- mapM_tuple l1; do l2' <- mapM_tuple l2;
+                            Ret [tuple of l1' ++ l2'])%Do.
+Proof.
+elim: n l1 => [[] [] //= H0 | n IH [] [] // a' l1 Hl].
+  rewrite bindretf /=.
+  under eq_bind => l2'. rewrite (_ : Ret _ = Ret l2'); first over.
+    congr Ret. exact: val_inj.
+  rewrite bindmret.
+  congr mapM_tuple; exact: val_inj.
+have Hl' : size l1 == n by [].
+have -> : [tuple of Tuple Hl ++ l2] = [tuple of a' :: Tuple Hl' ++ l2].
+  exact: val_inj.
+rewrite /= bindA.
+apply: eq_bind => b' /=.
+rewrite bindA.
+under [RHS]eq_bind do rewrite bindretf.
+rewrite (_ : Tuple _ = [tuple of Tuple Hl' ++ l2]); last by exact: val_inj.
+rewrite IH bindA /=.
+under eq_bind do rewrite bindA.
+under eq_bind do under eq_bind do rewrite bindretf /=.
+congr (mapM_tuple _ >>= _).
+  exact: val_inj.
+apply: boolp.funext => l1'.
+apply: eq_bind => l2'.
+congr Ret; exact: val_inj.
+Qed.
+End mapM.
+
 Section extra_rules.
 Variable M : unionFailMonad.
 Local Notation I := hierarchy.UnionFind.I.
@@ -377,59 +429,11 @@ Proof.
     + by rewrite union_axiom_neqcase.
 Qed.
 
-Definition union_iter (l : seq (I*I)) : M unit :=
-  foldM (fun _  p => union p.1 p.2) tt l.
-
-
-Lemma foldM_rcons R T (f : R -> T -> M R) x s z :
-  foldM f x (rcons s z) = foldM f x s >>= f ^~ z.
-Proof.
-elim: s x => [|y s IH] /= x.
-  by rewrite bindmret bindretf.
-rewrite bindA; exact: eq_bind.
-Qed.
-
-Fixpoint mapM_tuple (s : monad) A B n (f : A -> s B) (l : n.-tuple A) :
-  s (n.-tuple B).
-revert l; case n.
-  move=> _.
-  exact (Ret [tuple]).
-move=> m [] [] // a l /= Hsz.
-refine (f a >>= fun b => mapM_tuple s A B m f (Tuple Hsz) >>= fun l' => _).
-exact (Ret [tuple of b :: l']).
-Defined.
-
-Lemma mapM_tuple_cat (s : monad) A B n m (f : A -> s B) (l1 : n.-tuple A) (l2 : m.-tuple A) :
-  (mapM_tuple f [tuple of l1 ++ l2]) =
-  (do l1' <- mapM_tuple f l1; do l2' <- mapM_tuple f l2;
-                              Ret [tuple of l1' ++ l2'])%Do.
-Proof.
-elim: n l1 => [[] [] //= H0 | n IH [] [] // a' l1 Hl].
-  rewrite bindretf /=.
-  under eq_bind => l2'. rewrite (_ : Ret _ = Ret l2'); first over.
-    congr Ret. exact: val_inj.
-  rewrite bindmret.
-  congr mapM_tuple; exact: val_inj.
-have Hl' : size l1 == n by [].
-have -> : [tuple of Tuple Hl ++ l2] = [tuple of a' :: Tuple Hl' ++ l2].
-  exact: val_inj.
-rewrite /= bindA.
-apply: eq_bind => b' /=.
-rewrite bindA.
-under [RHS]eq_bind do rewrite bindretf.
-rewrite (_ : Tuple _ = [tuple of Tuple Hl' ++ l2]); last by exact: val_inj.
-rewrite IH bindA /=.
-under eq_bind do rewrite bindA.
-under eq_bind do under eq_bind do rewrite bindretf /=.
-congr (mapM_tuple _ _ >>= _).
-  exact: val_inj.
-apply: boolp.funext => l1'.
-apply: eq_bind => l2'.
-congr Ret; exact: val_inj.
-Qed.
-
+Section find_pairs.
+(* normalize a list of reference pairs *)
 Definition find_pairs n : n.-tuple (I * I) -> M (n.-tuple (I * I)) :=
-  mapM_tuple (fun '(i,j) => do i' <- find i; do j' <- find j; Ret (i',j'))%Do.
+  mapM_tuple (fun '(i,j) => do i' <- find i; do j' <- find j; Ret (i',j'))%Do
+             (n:=n).
 
 Lemma find_pairsC A n a (l : n.-tuple _) (k : _ -> _ -> M A) :
   (find a >>= fun a' => find_pairs l >>= k a') ≈
@@ -471,6 +475,10 @@ normalize_bindA.
 apply: bindfeqv => j'.
 by rewrite -(IH (Tuple Hl) (fun x y => k [tuple of _ :: x] [tuple of _ :: y])).
 Qed.
+End find_pairs.
+
+Definition union_iter (l : seq (I*I)) : M unit :=
+  foldM (fun _  p => union p.1 p.2) tt l.
 
 Lemma find_union_iter_find (l : seq (I * I)) u :
   (find u >>= fun v => union_iter l >> find v) ≈ (union_iter l >> find u).
@@ -497,7 +505,7 @@ Lemma union_iteration n (l : n.-tuple (I*I)) a b :
   (find_pairs l >>= fun l => find a >>= fun a' => find b >>= fun b' =>
    union_iter l >> Ret (exists_path l a' b')).
 Proof.
-elim: n l a b => [[] [] //= H0 | n IH [l Hl]] a b /=.
+elim: n l a b => [[] [] //= H0 | n IH [l Hl]] a b.
   rewrite /union_iter bindretf /exists_path.
   normalize_bindA.
   apply: bindfeqv => a'.
@@ -511,7 +519,7 @@ elim: n l a b => [[] [] //= H0 | n IH [l Hl]] a b /=.
 case: l Hl => // c l.
 (* reverse *)
 rewrite (lastI c l) -cats1 -addn1 => Hl.
-rewrite /union_iter.
+rewrite /union_iter /=.
 rewrite {1}cats1 foldM_rcons -/(union_iter _) bindA.
 setoid_rewrite union_classes.
 have Hl' : size (belast c l) == n by rewrite cats1 size_rcons addn1 in Hl.
@@ -632,6 +640,7 @@ setoid_rewrite (findC _ i.2 b).
 setoid_rewrite (findC _ i.1 b).
 setoid_rewrite findfind.
 setoid_rewrite findfind.
+(* reach final results *)
 under eq_bind do under eq_bind do under eq_bind do under eq_bind do
   under eq_bind do rewrite -bindA.
 setoid_rewrite <- find_union_iter_find.
