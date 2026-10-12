@@ -4,15 +4,6 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Lemma dropI A i (x0 : A) s :
-  size s > i -> drop i s = nth x0 s i :: drop i.+1 s.
-Proof.
-move=> Hi.
-rewrite -add1n -drop_drop -{2}(addn0 i) -nth_drop.
-have : size (drop i s) > 0 by rewrite size_drop ltn_subRL addn0.
-case: (drop i s) => //= a {Hi}s _; by rewrite drop0.
-Qed.
-
 Section symfingraph.
 Variable I : eqType.
 
@@ -142,6 +133,13 @@ Qed.
 Lemma redgeK v : redge (redge v) = v.
 Proof. by case: v => v []. Qed.
 
+Lemma same_edge (v w : 'I_n * bool) : v.1 = w.1 -> v = w \/ v = redge w.
+Proof.
+rewrite {-1}(surjective_pairing v) {-1}(surjective_pairing w) /redge /= => ->.
+case: (eqVneq v.2 w.2) => [-> |]; first by left.
+by rewrite negb_eqb addbC => /addbP ->; right.
+Qed.
+
 Lemma is_edges_path_uniq a b p0 p :
   is_edges_path a b p0 p -> a != b ->
   exists q0 q, is_edges_path a b q0 q && uniq (unzip1 (q0 :: q)).
@@ -150,106 +148,42 @@ rewrite /is_edges_path.
 elim: p a p0 => /=[| p1 p IH] a p0.
   move=> Hp ab.
   by exists p0, nil => /=; rewrite Hp.
-case/andP=> /andP[Ha] /andP[Hp1] Hp Hb ab.
+case/andP => /andP[Ha] /andP[Hp1] Hp Hb ab.
 case/boolP: (lookup_vertex p0 == b) => Hb0.
-  exists p0, nil.
-  by rewrite Ha /= eq_sym Hb0.
+  by exists p0, nil; rewrite Ha /= eq_sym Hb0.
 case: (IH (lookup_vertex p0) p1) => //.
   by rewrite Hp1 Hp.
 move=> q0 [q] /andP[] /andP[] /andP[Hp0] Hq Hqb Hu.
 case/boolP: (p0.1 \in unzip1 (q0 :: q)) => Hmem; last first.
-  exists p0, (q0 :: q).
-  by rewrite Ha Hqb Hmem [uniq _]Hu /= Hp0 Hq.
-(* alternative proof is not shorter...
+  by exists p0, (q0 :: q); rewrite Ha Hqb Hmem [uniq _]Hu /= Hp0 Hq.
 case/(nthP p0.1): Hmem => i.
-rewrite size_map => Hi Hnthi.
-pose qi := nth q0 (q0 :: q) i.
-have p0qi : p0 = qi \/ p0 = redge qi.
-  case/boolP: (p0.2 == qi.2) => p0qi2; [left | right].
-    rewrite (surjective_pairing p0) (surjective_pairing qi).
-    by rewrite -Hnthi (eqP p0qi2) (nth_map q0).
-  rewrite (surjective_pairing p0) /redge -Hnthi (nth_map q0) //.
-  by move: p0qi2; rewrite negb_eqb addbC => /addbP ->.
-case: (posnP i) => Hi0.
-  subst qi; subst i; case: p0qi => /= p0qi; subst p0.
-    by exists q0, q; rewrite Ha Hq Hqb /= Hu.
-  case: q Hq Hqb Hu {Hnthi Hi} => /= [_ /eqP Hb' | q1 q].
-    by move: ab; rewrite (eqP Ha) Hb' redgeK eqxx.
-  case/andP => /eqP q0q1 Hq Hqb /andP[] _ Hu.
-  exists q1, q.
-  by rewrite -q0q1 (eqP Ha) redgeK eqxx Hq Hqb /= Hu.
-have Hq' : is_edges_path (lookup_vertex p0) b q0 q.
-  by rewrite /is_edges_path Hp0 Hq Hqb.
-destruct i as [|i] => //.
-rewrite /= ltnS in Hi.
-case: p0qi => p0qi; subst p0.
-  case: (is_edges_path_split Hq' Hi) => Hql Hqr.
-  exists qi, (drop i.+1 q).
-  rewrite -/(is_edges_path _ _ _ _).
-  rewrite (eqP Ha) Hqr /=.
-  case/andP: Hu => _.
-  rewrite -{1}(cat_take_drop i q) [unzip1 _]map_cat cat_uniq andbA => /andP[_].
-  rewrite /qi -{2}(addn0 i) /= -nth_drop -add1n -drop_drop drop1.
-  by clear; case (drop i q).
-rewrite redgeK in Ha.
-exists (nth q0 q i.+1), (drop i.+2 q).
-rewrite -/(is_edges_path _ _ _ _) (eqP Ha).
-case/boolP: (i.+1 == size q) => Hi'.
-  move: ab.
-  by rewrite (eqP Ha) (eqP Hqb) (last_nth q0) -(eqP Hi') eqxx.
-rewrite leq_eqVlt (negbTE Hi') /= in Hi.
-case: (is_edges_path_split Hq' (ltnW Hi)) => _.
-rewrite /is_edges_path => /andP[] /andP[_].
-rewrite (dropI q0 Hi) /qi /= => -> -> /=.
-case/andP: Hu => _.
-rewrite -{1}(cat_take_drop i.+1 q) [unzip1 _]map_cat cat_uniq.
-case/andP => _ /andP[_].
-by rewrite (dropI q0 Hi). *)
-move: (Hmem); rewrite -index_mem.
-set i := index p0.1 _.
 rewrite size_map => Hi.
-pose pi := nth p0 (q0 :: q) i.
-have p0pi1 : p0.1 == pi.1.
-  by rewrite /pi -(nth_map p0 p0.1 fst) // -/(unzip1 _) /i nth_index.
+rewrite (nth_map p0) //.
+set qi := nth p0 _ _ => /esym p0qi1.
 case/andP: Hu => Hup0 Hu.
-case/boolP: (p0.2 == pi.2) => p0pi2.
-  have p0pi : p0 = pi.
-    rewrite (surjective_pairing p0) (eqP p0pi1) (eqP p0pi2).
-    by rewrite -surjective_pairing.
+case: (same_edge p0qi1) => p0qi.
   exists p0, (drop i q).
-  rewrite Ha /=.
-  move: Hq.
+  move: Hqb Hq; rewrite Ha /=.
   case: (posnP i) => Hi0.
-    have p0q0 : p0 = q0 by rewrite p0pi /pi Hi0.
-    by rewrite Hi0 drop0 p0q0 Hup0 Hu Hqb => ->.
-  move: Hqb Hu.
-  rewrite -{1 2 3}(cat_take_drop i q) cat_path last_cat.
-  rewrite [unzip1 _]map_cat cat_uniq.
-  rewrite (_ : last q0 _ = last q0 (take i.+1 (q0 :: q))) //.
-  rewrite (take_nth p0) // last_rcons -/pi -p0pi.
-  move=> -> /andP[_] /andP[Hu0 ->] /andP[_] -> /=.
-  move: Hu0; rewrite -all_predC.
-  move/allP/(_ p0.1).
-  case: (p0.1 \in _) => //= /(_ isT).
-  rewrite p0pi -{1}(prednK Hi0) (take_nth p0) ?prednK // map_rcons mem_rcons.
-  by rewrite in_cons /pi -{1}(prednK Hi0) /= eqxx.
-have p0pi : pi = redge p0.
-  rewrite (surjective_pairing pi) (surjective_pairing p0).
-  rewrite (eqP p0pi1) /redge /=.
-  by case: p0.2 pi.2 p0pi2 => -[].
-case/boolP: (i == size q) => Hiq.
-  by move: ab; rewrite (eqP Ha) (eqP Hqb) (last_nth p0) -(eqP Hiq) -p0pi eqxx.
+    have -> : p0 = q0 by rewrite p0qi /qi Hi0.
+    by rewrite Hi0 drop0 Hup0 Hu => -> ->.
+  rewrite -{1 2}(cat_take_drop i q) cat_path last_cat.
+  have /(f_equal (last q0)) /= -> := take_nth p0 Hi.
+  rewrite last_rcons -/qi -p0qi => -> /andP[_] -> /=.
+  move: Hu; rewrite -{1}(cat_take_drop i.-1 q) [unzip1 _]map_cat cat_uniq.
+  case/andP => _ /andP[_].
+  by rewrite p0qi1 /qi -{2}(prednK Hi0) /= (drop_nth p0) ?prednK.
+have [Hiq | Hiq] := eqVneq i (size q).
+  by move: ab; rewrite (eqP Ha) (eqP Hqb) p0qi redgeK (last_nth p0) -Hiq eqxx.
 rewrite /= ltnS leq_eqVlt (negbTE Hiq) /= in Hi.
 exists (nth p0 q i), (drop i.+1 q).
-rewrite (eqP Ha).
-move: (Hq) Hu.
-rewrite -{1 2}(cat_take_drop i q) cat_path => /andP[_].
-rewrite (drop_nth p0) //= => /andP[] /eqP <- ->.
+rewrite (eqP Ha) (eqP Hqb) -(last_cons p0).
+move: Hq Hu.
+rewrite -{1 2 6}(cat_take_drop i q) cat_path /= last_cat => /andP[_].
+rewrite (drop_nth p0) //= eqxx => /andP[] /eqP <- ->.
 rewrite (_ : last q0 _ = last q0 (take i.+1 (q0 :: q))) //.
-rewrite (take_nth p0) 1?ltnW // last_rcons -/pi p0pi eqxx.
-rewrite [unzip1 _]map_cat cat_uniq /= => /andP[_] /andP[_] /andP[-> ->].
-rewrite -(last_cons p0) -drop_nth //.
-by rewrite (eqP Hqb) -{1}(cat_take_drop i q) last_cat (drop_nth p0 Hi) eqxx.
+rewrite (take_nth p0) 1?ltnW // last_rcons -/qi p0qi redgeK eqxx /=.
+by rewrite [unzip1 _]map_cat cat_uniq /= => /andP[_] /andP[_] /andP[-> ->].
 Qed.
 
 Lemma adjacent_lookup_vertex v :
