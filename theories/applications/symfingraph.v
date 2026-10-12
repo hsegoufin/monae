@@ -216,12 +216,15 @@ by rewrite adjacent_sym adjacent_lookup_vertex /= => /IH.
 Qed.
 
 Lemma is_edges_path_exists a b p0 p :
-  is_edges_path a b p0 p -> uniq p -> exists_edges_path a b.
+  is_edges_path a b p0 p -> exists_edges_path a b.
 Proof.
-move=> Hp /card_uniqP Hu.
-move: (max_card (mem p)) => /=.
+case/boolP: (a == b) => ab.
+  by move=> _; apply/orP; left.
+case/is_edges_path_uniq => // q0 [q] /andP[] Hp /map_uniq /=.
+case/andP => _ /card_uniqP Hu.
+move: (max_card (mem q)) => /=.
 rewrite Hu card_prod /= card_ord card_bool => Hsz.
-apply/orP; right; apply/existsP; exists p0.
+apply/orP; right; apply/existsP; exists q0.
 by apply/existsP; exists (Bseq Hsz).
 Qed.
 
@@ -237,8 +240,7 @@ apply/(sameP idP)/(iffP idP).
   by rewrite adjacent_sym adjacent_lookup_vertex edges_path_relpre.
 rewrite -(negbTE ab) /is_path_witness => /existsP[] /= p Hp.
 suff: exists p0 p', is_edges_path a b p0 p'.
-  case=> p0 [p'] /is_edges_path_uniq[] //= q0 [q] /andP[Hq] /andP[_] /map_uniq.
-  exact: (is_edges_path_exists Hq).
+  by case=> p0 [p'] /is_edges_path_exists.
 elim: (val p) a b ab Hp => /= [|c {}p IH] a b ab.
   by rewrite (negbTE ab).
 case/andP => /andP[] /adjacentP [e0] [<- e0c] Hp Lp.
@@ -346,9 +348,7 @@ case/boolP: (rshift n ord0 \in unzip1 (q0 :: q)) => Hru; last first.
   move=> q0' [q'] [qq'] Hq'. 
   elim: (negP Hab).
   rewrite exists_edges_pathP.
-  apply: (is_edges_path_exists Hq').
-  move: Hu; rewrite qq' -[unzip1 _]map_comp /= => /andP[_].
-  exact: map_uniq.
+  exact: (is_edges_path_exists Hq').
 case/mapP: Hru => /= -[v d] Hi /= Hv; subst v.
 case/(nthP q0): (Hi) => pij Hpij Hnth.
 case/andP: Hq Hu => /andP[].
@@ -384,9 +384,7 @@ apply/andP; split.
     rewrite -lock /= => ->.
     by rewrite negb_or !andbT.
   move=> q0' [q'] [qq'] Hq'.
-  apply: (is_edges_path_exists Hq').
-  move: Hu; rewrite -lock /= [unzip1 _]map_cat cat_uniq => /andP[_] /andP[].
-  by move: qq' => /= [] _ -> /map_uniq /map_uniq.
+  exact: (is_edges_path_exists Hq').
 rewrite -exists_edges_pathP exists_path_sym exists_edges_pathP.
 set i' := lookup_vertex _ _.
 case/boolP: (i' == b) => bi; first by rewrite /exists_edges_path bi.
@@ -405,9 +403,7 @@ case: (is_edges_path_weaken Hq).
   rewrite [_ ++ _](take_nth q0 Hpij) [unzip1 _]map_rcons mem_rcons.
   by rewrite Hnth in_cons eqxx.
 move=> q0' [q' [qq' Hq']].
-apply: (is_edges_path_exists Hq').
-move: Hu2; rewrite Hqht qq' /= -[unzip1 _]map_comp => /andP[_].
-exact: map_uniq.
+exact: (is_edges_path_exists Hq').
 Qed.
 
 End symfingraph.
