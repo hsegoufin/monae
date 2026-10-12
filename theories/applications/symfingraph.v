@@ -309,19 +309,19 @@ Lemma exists_path_split n (l : n.-tuple (I * I)) (i j a b : I) :
   = exists_path [tuple of l ++ [:: (i, j)]] a b.
 Proof.
 set l' := [tuple of _].
-case/boolP: (exists_path l a b) => /=.
-  case/existsP => /= p Hp.
+case/boolP: (_ || _).
+  wlog: a b / exists_path l a b || exists_path l a i && exists_path l b j.
+    move=> H /orP[] H'.
+      by apply: (H _ _ H'); rewrite H'.
+    by rewrite exists_path_sym -H // andbC H' orbT.
+  move=> /[swap] _.
+  case/boolP: (exists_path l a b) => /=.
+    case/existsP => /= p Hp _.
+    exact/esym/is_path_witness_exists/is_path_witness_weaken/Hp.
+  move=> Hab /andP[] Hai Hbj.
   symmetry.
-  move: (is_path_witness_weaken [:: (i,j)] Hp).
-  exact: is_path_witness_exists.
-move=> Hab.
-case/boolP: (_ && _) => /=.
-  case/andP => Hai Hbj.
-  symmetry.
-  case/existsP: Hai => /= pai Hpai.
-  case/existsP: Hbj => /= pbj Hpbj.
-  move/(is_path_witness_weaken [tuple (i,j)]) in Hpai.
-  move/(is_path_witness_weaken [tuple (i,j)]): Hpbj.
+  case/existsP: Hai => /= pai /(is_path_witness_weaken [:: (i,j)]) Hpai.
+  case/existsP: Hbj => /= pbj /(is_path_witness_weaken [:: (i,j)]).
   case/is_path_witness_rev => pjb Hpjb.
   have Hpij : is_path_witness l' i j [:: (rshift n ord0, false)].
      rewrite /is_path_witness /= /lookup_vertex /= tnth_rshift /= eqxx.
@@ -330,23 +330,7 @@ case/boolP: (_ && _) => /=.
                (shift_path 1 pai ++ [:: (rshift n ord0, false)] ++ pjb).
     exact/is_path_witness_cat/is_path_witness_cat/Hpjb/Hpij.
   exact: is_path_witness_exists.
-move => aibj.
-case/boolP: (_ && _) => /=.
-  case/andP => Haj Hbi.
-  symmetry.
-  case/existsP: Haj => /= paj Hpaj.
-  case/existsP: Hbi => /= pbi Hpbi.
-  move/(is_path_witness_weaken [tuple (i,j)]) in Hpaj.
-  move/(is_path_witness_weaken [tuple (i,j)]): Hpbi.
-  case/is_path_witness_rev => pib Hpib.
-  have Hpji : is_path_witness l' j i [:: (rshift n ord0, true)].
-     rewrite /is_path_witness /= /lookup_vertex /= tnth_rshift /= eqxx.
-     by rewrite /adjacent orbC mem_cat mem_seq1 eqxx orbT.
-  have : is_path_witness l' a b
-               (shift_path 1 paj ++ [:: (rshift n ord0, true)] ++ pib).
-    exact/is_path_witness_cat/is_path_witness_cat/Hpib/Hpji.
-  exact: is_path_witness_exists.
-move=> ajbi.
+rewrite -orbA negb_or => /andP[Hab Haijb].
 symmetry.
 apply/negbTE/negP; rewrite exists_edges_pathP.
 case/boolP: (a == b) => ab.
@@ -366,23 +350,20 @@ case/boolP: (rshift n ord0 \in unzip1 (q0 :: q)) => Hru; last first.
   move: Hu; rewrite qq' -[unzip1 _]map_comp /= => /andP[_].
   exact: map_uniq.
 case/mapP: Hru => /= -[v d] Hi /= Hv; subst v.
-move: (Hi); rewrite -index_mem.
-set pij := index _ _ => Hpij.
+case/(nthP q0): (Hi) => pij Hpij Hnth.
 case/andP: Hq Hu => /andP[].
 rewrite -(cat_take_drop pij q) cat_path last_cat => Ha /andP[Hq1 Hq2] Hb.
 rewrite -cat1s catA [unzip1 _]map_cat -!/(unzip1 _) cat_uniq.
 case/andP => Hu1 /andP[Hu12 Hu2].
 have Hq0 : last q0 (take pij q) = (rshift n ord0, d).
-  have <- := nth_index q0 Hi.
-  rewrite -/pij (last_nth q0) size_takel //.
-  rewrite -{2}(cat_take_drop pij q) -[in RHS]cat1s catA nth_cat /=.
-  by rewrite size_takel //= leqnn.
+  rewrite -Hnth (_ : last _ _ = last q0 (take pij.+1 (q0 :: q))) //.
+  by rewrite (take_nth q0) // last_rcons.
+elim: (negP Haijb).
 suff : exists_edges_path l a (lookup_vertex l' (rshift n ord0, ~~ d)) &&
        exists_edges_path l b (lookup_vertex l' (rshift n ord0, d)).
-  clear -aibj ajbi.
-  case: d; rewrite /lookup_vertex /= tnth_rshift /= -!exists_edges_pathP => Hab.
-    by rewrite Hab in ajbi.
-  by rewrite Hab in aibj.
+  rewrite /lookup_vertex /=.
+  clear; case: d; rewrite tnth_rshift /= -!exists_edges_pathP => -> //.
+  by rewrite orbT.
 apply/andP; split.
   case/boolP: (pij == 0) => pij0.
     move: Hq0; rewrite (eqP pij0) take0 /= => Hq0.
@@ -392,10 +373,9 @@ apply/andP; split.
   move: Hq1 Hu1 {Hu12 Hu2 Hq2}.
   rewrite -lt0n in pij0.
   rewrite -{1 2}(prednK pij0) (take_nth q0) ?prednK //.
-  rewrite index_mem in Hpij.
   rewrite (_ : nth _ _ _ = nth q0 (q0 :: q) pij.-1.+1) // prednK //.
   rewrite [[:: q0]]lock.
-  rewrite (nth_index q0 Hpij) -cats1 cat_path /= andbT => Hq Hu.
+  rewrite Hnth -cats1 cat_path /= andbT => Hq Hu.
   have : is_edges_path l' a j' q0 (take pij.-1 q).
     by rewrite /is_edges_path Ha /= eq_sym.
   case/is_edges_path_weaken.
@@ -423,7 +403,7 @@ case: (is_edges_path_weaken Hq).
   apply: contra Hu12 => Hu0.
   apply/hasP; exists (rshift n ord0) => //.
   rewrite [_ ++ _](take_nth q0 Hpij) [unzip1 _]map_rcons mem_rcons.
-  by rewrite nth_index // in_cons eqxx.
+  by rewrite Hnth in_cons eqxx.
 move=> q0' [q' [qq' Hq']].
 apply: (is_edges_path_exists Hq').
 move: Hu2; rewrite Hqht qq' /= -[unzip1 _]map_comp => /andP[_].
