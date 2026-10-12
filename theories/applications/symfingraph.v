@@ -4,6 +4,15 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Lemma dropI A i (x0 : A) s :
+  size s > i -> drop i s = nth x0 s i :: drop i.+1 s.
+Proof.
+move=> Hi.
+rewrite -add1n -drop_drop -{2}(addn0 i) -nth_drop.
+have : size (drop i s) > 0 by rewrite size_drop ltn_subRL addn0.
+case: (drop i s) => //= a {Hi}s _; by rewrite drop0.
+Qed.
+
 Section symfingraph.
 Variable I : eqType.
 
@@ -66,17 +75,15 @@ Lemma is_path_witness_rev (a b : I) p :
   exists p', is_path_witness b a p'.
 Proof.
 elim: p a => [| c p IH] a /=.
-  move/eqP<-.
-  rewrite /is_path_witness.
-  by exists nil => /=.
+  by rewrite /is_path_witness => /eqP <-; exists nil => /=.
 case/andP => /= /andP[ac Hp] Lp.
 case: (IH (lookup_vertex c)).
   by rewrite /is_path_witness Hp.
 move=> bc /andP[Hbc /eqP Lbc].
 case: (adjacent_vertex ac) => a' Ha'.
-exists (rcons bc a').
-rewrite -cats1 /is_path_witness map_cat cat_path Hbc /= Lbc Ha'.
-by rewrite adjacent_sym ac last_cat /=.
+exists (bc ++ [:: a']).
+rewrite /is_path_witness map_cat cat_path Hbc /=.
+by rewrite Lbc Ha' adjacent_sym ac last_cat /=.
 Qed.
 
 Lemma is_path_witness_exists a b p :
@@ -89,13 +96,12 @@ elim/ltn_ind: m p => m IH p Hsz Hp.
 case: (leqP (size p) (n * 2)) => Hszp.
   by apply/existsP; exists (Bseq Hszp).
 case: (is_path_witness_ord Hp).
-  apply: leq_trans Hszp.
-  by rewrite ltnS.
+  exact: leq_trans Hszp.
 move=> a' [b'] [Ha] [Hp'] Lp'.
 case/andP: Hp => Hp.
 rewrite -{1}Ha last_map => Hb.
 case: (shortenP Hp') Hb Lp' => /= p' {}Hp' Hu _ Hb Lp'.
-move: (max_card (mem p')) => /=.
+have /= := max_card (mem p').
 have /card_uniqP -> : uniq p' by case/andP: Hu.
 rewrite card_prod /= card_ord card_bool => Hszp'.
 apply/existsP; exists (Bseq Hszp') => /=.
@@ -113,6 +119,28 @@ Definition is_edges_path a b p0 p :=
   (a == lookup_vertex (redge p0))
   && path (fun r s => lookup_vertex r == lookup_vertex (redge s)) p0 p
   && (b == lookup_vertex (last p0 p)).
+
+(* This lemma is not really useful, as it fails to shorten proofs *)
+Lemma is_edges_path_split a b p0 p i :
+  is_edges_path a b p0 p -> i < size p ->
+  let v := nth p0 p i in
+  let c := lookup_vertex (redge v) in
+  is_edges_path a c p0 (take i p) /\
+  is_edges_path c b v (drop i.+1 p).
+Proof.
+rewrite /is_edges_path => /andP[] /andP[] Ha Hp Hb Hi.
+move: (Hi) Hp Hb.
+rewrite -(cat_take_drop i p) nth_cat take_cat size_cat drop_cat.
+rewrite size_takel; last exact/ltnW.
+rewrite ltnn subnn take0 cats0 cat_path nth0 (ltnNge i.+1) leqnSn /=.
+rewrite -addn1 leq_add2l addKn drop1.
+case: (drop i p) => // v q _.
+case/andP => -> /= /andP[].
+by rewrite Ha eq_sym eqxx last_cat => -> -> -> /=.
+Qed.
+
+Lemma redgeK v : redge (redge v) = v.
+Proof. by case: v => v []. Qed.
 
 Lemma is_edges_path_uniq a b p0 p :
   is_edges_path a b p0 p -> a != b ->
@@ -132,6 +160,51 @@ move=> q0 [q] /andP[] /andP[] /andP[Hp0] Hq Hqb Hu.
 case/boolP: (p0.1 \in unzip1 (q0 :: q)) => Hmem; last first.
   exists p0, (q0 :: q).
   by rewrite Ha Hqb Hmem [uniq _]Hu /= Hp0 Hq.
+(* alternative proof is not shorter...
+case/(nthP p0.1): Hmem => i.
+rewrite size_map => Hi Hnthi.
+pose qi := nth q0 (q0 :: q) i.
+have p0qi : p0 = qi \/ p0 = redge qi.
+  case/boolP: (p0.2 == qi.2) => p0qi2; [left | right].
+    rewrite (surjective_pairing p0) (surjective_pairing qi).
+    by rewrite -Hnthi (eqP p0qi2) (nth_map q0).
+  rewrite (surjective_pairing p0) /redge -Hnthi (nth_map q0) //.
+  by move: p0qi2; rewrite negb_eqb addbC => /addbP ->.
+case: (posnP i) => Hi0.
+  subst qi; subst i; case: p0qi => /= p0qi; subst p0.
+    by exists q0, q; rewrite Ha Hq Hqb /= Hu.
+  case: q Hq Hqb Hu {Hnthi Hi} => /= [_ /eqP Hb' | q1 q].
+    by move: ab; rewrite (eqP Ha) Hb' redgeK eqxx.
+  case/andP => /eqP q0q1 Hq Hqb /andP[] _ Hu.
+  exists q1, q.
+  by rewrite -q0q1 (eqP Ha) redgeK eqxx Hq Hqb /= Hu.
+have Hq' : is_edges_path (lookup_vertex p0) b q0 q.
+  by rewrite /is_edges_path Hp0 Hq Hqb.
+destruct i as [|i] => //.
+rewrite /= ltnS in Hi.
+case: p0qi => p0qi; subst p0.
+  case: (is_edges_path_split Hq' Hi) => Hql Hqr.
+  exists qi, (drop i.+1 q).
+  rewrite -/(is_edges_path _ _ _ _).
+  rewrite (eqP Ha) Hqr /=.
+  case/andP: Hu => _.
+  rewrite -{1}(cat_take_drop i q) [unzip1 _]map_cat cat_uniq andbA => /andP[_].
+  rewrite /qi -{2}(addn0 i) /= -nth_drop -add1n -drop_drop drop1.
+  by clear; case (drop i q).
+rewrite redgeK in Ha.
+exists (nth q0 q i.+1), (drop i.+2 q).
+rewrite -/(is_edges_path _ _ _ _) (eqP Ha).
+case/boolP: (i.+1 == size q) => Hi'.
+  move: ab.
+  by rewrite (eqP Ha) (eqP Hqb) (last_nth q0) -(eqP Hi') eqxx.
+rewrite leq_eqVlt (negbTE Hi') /= in Hi.
+case: (is_edges_path_split Hq' (ltnW Hi)) => _.
+rewrite /is_edges_path => /andP[] /andP[_].
+rewrite (dropI q0 Hi) /qi /= => -> -> /=.
+case/andP: Hu => _.
+rewrite -{1}(cat_take_drop i.+1 q) [unzip1 _]map_cat cat_uniq.
+case/andP => _ /andP[_].
+by rewrite (dropI q0 Hi). *)
 move: (Hmem); rewrite -index_mem.
 set i := index p0.1 _.
 rewrite size_map => Hi.
@@ -143,10 +216,10 @@ case/boolP: (p0.2 == pi.2) => p0pi2.
   have p0pi : p0 = pi.
     rewrite (surjective_pairing p0) (eqP p0pi1) (eqP p0pi2).
     by rewrite -surjective_pairing.
-  exists p0; exists (drop i q).
+  exists p0, (drop i q).
   rewrite Ha /=.
   move: Hq.
-  case/boolP: (i == 0) => [/eqP|] Hi0.
+  case: (posnP i) => Hi0.
     have p0q0 : p0 = q0 by rewrite p0pi /pi Hi0.
     by rewrite Hi0 drop0 p0q0 Hup0 Hu Hqb => ->.
   move: Hqb Hu.
@@ -158,9 +231,7 @@ case/boolP: (p0.2 == pi.2) => p0pi2.
   move: Hu0; rewrite -all_predC.
   move/allP/(_ p0.1).
   case: (p0.1 \in _) => //= /(_ isT).
-  rewrite p0pi.
-  rewrite -lt0n in Hi0.
-  rewrite -{1}(prednK Hi0) (take_nth p0) ?prednK // map_rcons mem_rcons.
+  rewrite p0pi -{1}(prednK Hi0) (take_nth p0) ?prednK // map_rcons mem_rcons.
   by rewrite in_cons /pi -{1}(prednK Hi0) /= eqxx.
 have p0pi : pi = redge p0.
   rewrite (surjective_pairing pi) (surjective_pairing p0).
