@@ -269,6 +269,20 @@ Lemma lookup_vertex_lshift n m (l1 : n.-tuple _) (l2 : m.-tuple _) v d :
   lookup_vertex [tuple of l1 ++ l2] (lshift m v, d) = lookup_vertex l1 (v, d).
 Proof. by rewrite /lookup_vertex /= tnth_lshift. Qed.
 
+Lemma path_weaken_ord n (l : n.-tuple (I * I)) (p : seq ('I_(n+1) * bool)) :
+  rshift n ord0 \notin unzip1 p ->
+  exists q, p = [seq (lshift 1 v.1, v.2) | v <- q].
+Proof.
+move=> Hu.
+exists (pmap (fun v => if split v.1 is inl k then Some (k,v.2) else None) p).
+elim: p Hu => //= -[v d] p /= IH.
+rewrite in_cons negb_or => /andP[nv Hu].
+case: (splitP v) => /= j vj.
+  rewrite {1}IH //; congr ((_,_) :: _); exact: val_inj.
+case: j vj => -[] // Hj /= vn.
+elim: (negP nv); exact/eqP/val_inj.
+Qed.
+
 Lemma is_edges_path_weaken n (l : n.-tuple (I * I)) (ij : I * I) a b p0 p :
   is_edges_path [tuple of l ++ [tuple ij]] a b p0 p ->
   uniq (rshift n ord0 :: unzip1 (p0 :: p)) ->
@@ -277,35 +291,16 @@ Lemma is_edges_path_weaken n (l : n.-tuple (I * I)) (ij : I * I) a b p0 p :
     is_edges_path l a b q0 q.
 Proof.
 move=> Hp Hu.
-pose q := pmap (fun v : 'I_(n+1) * bool =>
-                   if split v.1 is inl k then Some (k,v.2) else None)
-               (p0 :: p).
 have Hu0 : rshift n ord0 \notin unzip1 (p0 :: p) by case/andP: Hu.
-have pq : map (fun v => (lshift 1 v.1, v.2)) q = p0 :: p.
-  move: Hu0; clear; subst q.
-  elim: (p0 :: p) => //= -[v d] {p0 p}p /= IH.
-  rewrite in_cons negb_or => /andP[nv Hu].
-  case: (splitP v) => /= j vj.
-    rewrite IH //.
-    congr ((_,_) :: _).
-    by apply/val_inj; rewrite /= vj /=.
-  case: j vj => -[] // Hj /= => vn.
-  elim: (negP nv).
-  by apply/eqP/val_inj; rewrite /= vn.
-case: q pq => // q0 q [] p0q0 pq.
+case: (path_weaken_ord l Hu0) => -[] // q0 q [] p0q0 pq.
 exists q0, q; split.
-  by rewrite -p0q0 -pq.
+  by rewrite p0q0 pq.
 rewrite /is_edges_path.
 case/andP: Hp => /andP[].
-rewrite -p0q0 lookup_vertex_lshift => ->.
-rewrite -pq path_map.
-rewrite (eq_path
-           (e':=fun r s => lookup_vertex l r == lookup_vertex l (redge s)));
-  last first.
-  move=> v w /=.
-  by rewrite !lookup_vertex_lshift /= -/(redge w) -surjective_pairing.
-move->.
-by rewrite /=last_map lookup_vertex_lshift -surjective_pairing.
+rewrite p0q0 lookup_vertex_lshift => -> /[swap].
+rewrite pq last_map lookup_vertex_lshift -surjective_pairing => -> /=.
+rewrite andbT path_map /is_true => <-; apply: eq_path => v w /=.
+by rewrite !lookup_vertex_lshift /= -/(redge w) -surjective_pairing.
 Qed.
 
 Lemma exists_path_split n (l : n.-tuple (I * I)) (i j a b : I) :
