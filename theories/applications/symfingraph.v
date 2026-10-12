@@ -269,7 +269,7 @@ Lemma lookup_vertex_lshift n m (l1 : n.-tuple _) (l2 : m.-tuple _) v d :
   lookup_vertex [tuple of l1 ++ l2] (lshift m v, d) = lookup_vertex l1 (v, d).
 Proof. by rewrite /lookup_vertex /= tnth_lshift. Qed.
 
-Lemma path_weaken_ord n (l : n.-tuple (I * I)) (p : seq ('I_(n+1) * bool)) :
+Lemma path_weaken_ord n (p : seq ('I_(n+1) * bool)) :
   rshift n ord0 \notin unzip1 p ->
   exists q, p = [seq (lshift 1 v.1, v.2) | v <- q].
 Proof.
@@ -291,8 +291,8 @@ Lemma is_edges_path_weaken n (l : n.-tuple (I * I)) (ij : I * I) a b p0 p :
     is_edges_path l a b q0 q.
 Proof.
 move=> Hp Hu.
-have Hu0 : rshift n ord0 \notin unzip1 (p0 :: p) by case/andP: Hu.
-case: (path_weaken_ord l Hu0) => -[] // q0 q [] p0q0 pq.
+have : rshift n ord0 \notin unzip1 (p0 :: p) by case/andP: Hu.
+case/path_weaken_ord => -[] // q0 q [] p0q0 pq.
 exists q0, q; split.
   by rewrite p0q0 pq.
 rewrite /is_edges_path.
