@@ -17,6 +17,16 @@ Definition lookup_vertex (p : 'I_n * bool) :=
 
 Definition redge (v : 'I_n * bool) := (v.1, ~~ v.2).
 
+Lemma adjacentP a b :
+  reflect (exists e, lookup_vertex (redge e) = a /\ lookup_vertex e = b)
+          (adjacent l a b).
+Proof.
+rewrite /adjacent /lookup_vertex /redge /=.
+apply/(iffP idP).
+  by case/orP=> /tnthP[i] Hi;[exists (i,false)|exists (i,true)];rewrite /= -Hi.
+by case=> e [] <- <-; case e.2; rewrite /= -surjective_pairing mem_tnth ?orbT.
+Qed.
+
 Definition is_path_witness a b (p : seq ('I_n * bool)) :=
   path (adjacent l) a (map lookup_vertex p) &&
   (last a (map lookup_vertex p) == b).
@@ -197,41 +207,12 @@ Definition exists_edges_path a b :=
   (a == b) ||
   [exists p0, [exists p : (n*2).-bseq ('I_n * bool), is_edges_path a b p0 p]].
 
-Lemma exists_edges_pathP a b : exists_path a b = exists_edges_path a b.
+Lemma edges_path_relpre p0 p :
+  path (fun r s => lookup_vertex r == lookup_vertex (redge s)) p0 p ->
+  path (relpre lookup_vertex (adjacent l)) p0 p.
 Proof.
-rewrite /exists_path /exists_edges_path.
-case/boolP: (a == b) => /= ab.
-  by apply/existsP; exists [bseq].
-apply/(sameP idP)/(iffP idP).
-  case/existsP => /= [p0] /existsP /= [p].
-  case/andP => /andP[/eqP Ha] Hp Hb.
-  have : is_path_witness a b (p0 :: p).
-    rewrite /is_path_witness Ha last_map [_ == _]/= eq_sym Hb andbT.
-    rewrite path_map /= adjacent_sym adjacent_lookup_vertex /=.
-    move: Hp; clear.
-    elim: (val p) p0 => //= v {}p IH w /andP[] /eqP ->.
-    rewrite adjacent_sym adjacent_lookup_vertex /=.
-    exact: IH.
-  exact: is_path_witness_exists.
-case/existsP => /= p.
-rewrite /is_path_witness => Hp.
-suff: exists p0 p', is_edges_path a b p0 p' /\ size p' <= size p.
-  case=> p0 [p'] [Hp'] Hsz.
-  apply/existsP; exists p0.
-  have Hszp' : size p' <= n * 2 by rewrite (leq_trans Hsz) // size_bseq.
-  by apply/existsP; exists (Bseq Hszp').
-elim: (val p) a b ab Hp => /= [|c {}p IH] a b ab.
-  by rewrite (negbTE ab).
-case/andP => /andP[Ha Hp] Lp.
-case/boolP: (lookup_vertex c == b) => cb.
-  rewrite /is_edges_path.
-  case/orP: Ha => /tnthP[i] Hi; [exists (i,false) | exists (i,true)];
-    by exists nil; rewrite /= /lookup_vertex /= -Hi /= eqxx eq_sym cb.
-move: (IH _ _ cb); rewrite Hp Lp => /(_ isT).
-case=> [e] [p'] [Hp' Hsz].
-case/orP: Ha => /tnthP [i] Hi; [exists (i,false) | exists (i,true)];
-  exists (e::p') => /=; rewrite ltnS Hsz; case/andP: Hp' => /andP[] Hc Hp' Hb;
-  by rewrite /is_edges_path /= Hb {1 2}/lookup_vertex /= -Hi /= eqxx Hc Hp'.
+elim: p p0 => //= v {}p IH w /andP[] /eqP ->.
+by rewrite adjacent_sym adjacent_lookup_vertex /= => /IH.
 Qed.
 
 Lemma is_edges_path_exists a b p0 p :
@@ -242,6 +223,29 @@ move: (max_card (mem p)) => /=.
 rewrite Hu card_prod /= card_ord card_bool => Hsz.
 apply/orP; right; apply/existsP; exists p0.
 by apply/existsP; exists (Bseq Hsz).
+Qed.
+
+Lemma exists_edges_pathP a b : exists_path a b = exists_edges_path a b.
+Proof.
+rewrite /exists_path /exists_edges_path.
+case/boolP: (a == b) => ab.
+  by apply/existsP; exists [bseq].
+apply/(sameP idP)/(iffP idP).
+  case/existsP => /= p0 /existsP /=[p] /andP[] /andP[/eqP Ha] Hp Hb.
+  have /is_path_witness_exists // : is_path_witness a b (p0 :: p).
+  rewrite /is_path_witness Ha last_map [_ == _]/= eq_sym Hb andbT path_map /=.
+  by rewrite adjacent_sym adjacent_lookup_vertex edges_path_relpre.
+rewrite -(negbTE ab) /is_path_witness => /existsP[] /= p Hp.
+suff: exists p0 p', is_edges_path a b p0 p'.
+  case=> p0 [p'] /is_edges_path_uniq[] //= q0 [q] /andP[Hq] /andP[_] /map_uniq.
+  exact: (is_edges_path_exists Hq).
+elim: (val p) a b ab Hp => /= [|c {}p IH] a b ab.
+  by rewrite (negbTE ab).
+case/andP => /andP[] /adjacentP [e0] [<- e0c] Hp Lp.
+case/boolP: (lookup_vertex c == b) => cb.
+  by exists e0, nil => /=; rewrite /is_edges_path e0c eqxx eq_sym cb.
+move: (IH _ _ cb); rewrite Hp Lp => /(_ isT) [e] [p'] Hp'.
+by exists e0, (e :: p'); rewrite /is_edges_path eqxx /= e0c [_ && _]Hp'.
 Qed.
 End expath.
 
