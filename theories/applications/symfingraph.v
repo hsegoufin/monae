@@ -4,6 +4,12 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Lemma nnilP A (s : seq A) : reflect (exists h t, s = h :: t) (size s > 0).
+Proof.
+case: s => [|h t]; rewrite (ltn0,ltnS); constructor;
+  by [case => h [t] | exists h, t].
+Qed.
+
 Section symfingraph.
 Variable I : eqType.
 
@@ -134,9 +140,7 @@ move: (Hi) Hp Hb.
 rewrite -(cat_take_drop i p) nth_cat take_cat size_cat drop_cat.
 rewrite size_takel; last exact/ltnW.
 rewrite ltnn subnn take0 cats0 cat_path nth0 (ltnNge i.+1) leqnSn /=.
-rewrite -addn1 leq_add2l addKn drop1.
-case: (drop i p) => // v q _.
-case/andP => -> /= /andP[].
+rewrite -addn1 leq_add2l addKn drop1 => /nnilP [v] [q] -> /andP[->] /= /andP[].
 by rewrite Ha eq_sym eqxx last_cat => -> -> -> /=.
 Qed.
 
@@ -161,7 +165,7 @@ elim: p a p0 => /=[| p1 p IH] a p0.
 case/andP => /andP[Ha] /andP[Hp1] Hp Hb ab.
 case/boolP: (lookup_vertex p0 == b) => Hb0.
   by exists p0, nil; rewrite Ha /= eq_sym Hb0.
-case: (IH (lookup_vertex p0) p1) => //.
+case: (IH (lookup_vertex p0) p1) => {IH} //.
   by rewrite Hp1 Hp.
 move=> q0 [q] /andP[] /andP[] /andP[Hp0] Hq Hqb Hu.
 case/boolP: (p0.1 \in unzip1 (q0 :: q)) => Hmem; last first.
@@ -332,25 +336,21 @@ case/boolP: (_ || _).
                (shift_path 1 pai ++ [:: (rshift n ord0, false)] ++ pjb).
     exact/is_path_witness_cat/is_path_witness_cat/Hpjb/Hpij.
   exact: is_path_witness_exists.
-rewrite -orbA negb_or => /andP[Hab Haijb].
-symmetry.
-apply/negbTE/negP; rewrite exists_edges_pathP.
+move=> H; symmetry; apply: contraNF H.
+rewrite exists_edges_pathP -orbA.
 case/boolP: (a == b) => ab.
-  elim: (negP Hab).
+  move=> _; apply/orP; left.
   by apply/existsP; exists [bseq].
 case/orP => [ab'|].
   by rewrite ab' in ab.
 case/existsP => /=[p0] /existsP /=[p].
-case/is_edges_path_uniq => // q0 [q] /andP[Hq Hu].
+case/is_edges_path_uniq => // {p0 p} q0 [q] /andP[Hq Hu].
 case/boolP: (rshift n ord0 \in unzip1 (q0 :: q)) => Hru; last first.
-  case: (is_edges_path_weaken Hq).
+  case: (is_edges_path_weaken Hq) => [|q0' [q'] [qq'] Hq'].
     by rewrite [q0::q]lock /= -lock Hru Hu.
-  move=> q0' [q'] [qq'] Hq'. 
-  elim: (negP Hab).
-  rewrite exists_edges_pathP.
-  exact: (is_edges_path_exists Hq').
+  by rewrite exists_edges_pathP (is_edges_path_exists Hq').
 case/mapP: Hru => /= -[v d] Hi /= Hv; subst v.
-case/(nthP q0): (Hi) => pij Hpij Hnth.
+case/(nthP q0): Hi => pij Hpij Hnth.
 case/andP: Hq Hu => /andP[].
 rewrite -(cat_take_drop pij q) cat_path last_cat => Ha /andP[Hq1 Hq2] Hb.
 rewrite -cat1s catA [unzip1 _]map_cat -!/(unzip1 _) cat_uniq.
@@ -358,52 +358,41 @@ case/andP => Hu1 /andP[Hu12 Hu2].
 have Hq0 : last q0 (take pij q) = (rshift n ord0, d).
   rewrite -Hnth (_ : last _ _ = last q0 (take pij.+1 (q0 :: q))) //.
   by rewrite (take_nth q0) // last_rcons.
-elim: (negP Haijb).
-suff : exists_edges_path l a (lookup_vertex l' (rshift n ord0, ~~ d)) &&
-       exists_edges_path l b (lookup_vertex l' (rshift n ord0, d)).
-  rewrite /lookup_vertex /=.
-  clear; case: d; rewrite tnth_rshift /= -!exists_edges_pathP => -> //.
-  by rewrite orbT.
+suff : exists_path l a (lookup_vertex l' (rshift n ord0, ~~ d)) &&
+       exists_path l b (lookup_vertex l' (rshift n ord0, d)).
+  rewrite /lookup_vertex /= orbC.
+  by clear; case: d; rewrite tnth_rshift /= => -> //; rewrite orbT.
 apply/andP; split.
+  rewrite exists_edges_pathP {Hb Hu12 Hu2 Hq2}.
   case/boolP: (pij == 0) => pij0.
-    move: Hq0; rewrite (eqP pij0) take0 /= => Hq0.
-    rewrite /exists_edges_path.
+    move: Hq0; rewrite (eqP pij0) take0 /= /exists_edges_path => Hq0.
     by rewrite (eqP Ha) Hq0 /redge /lookup_vertex /= tnth_rshift eqxx.
   set j' := lookup_vertex _ _.
-  move: Hq1 Hu1 {Hu12 Hu2 Hq2}.
+  move: Hq1 Hu1.
   rewrite -lt0n in pij0.
   rewrite -{1 2}(prednK pij0) (take_nth q0) ?prednK //.
-  rewrite (_ : nth _ _ _ = nth q0 (q0 :: q) pij.-1.+1) // prednK //.
-  rewrite [[:: q0]]lock.
-  rewrite Hnth -cats1 cat_path /= andbT => Hq Hu.
+  rewrite -{1}(prednK pij0) /= in Hnth.
+  rewrite [[:: q0]]lock Hnth -cats1 cat_path /= andbT => Hq Hu.
   have : is_edges_path l' a j' q0 (take pij.-1 q).
     by rewrite /is_edges_path Ha /= eq_sym.
   case/is_edges_path_weaken.
-    move: Hu.
-    rewrite catA [unzip1 _]map_cat cat_uniq => /andP[].
-    rewrite -lock /= => ->.
+    move: Hu; rewrite catA [unzip1 _]map_cat cat_uniq -lock /= => /andP[->].
     by rewrite negb_or !andbT.
-  move=> q0' [q'] [qq'] Hq'.
-  exact: (is_edges_path_exists Hq').
-rewrite -exists_edges_pathP exists_path_sym exists_edges_pathP.
+  by move=> q0' [q'] [qq'] /is_edges_path_exists.
+rewrite exists_path_sym exists_edges_pathP {Ha Hq1 Hu1}.
 set i' := lookup_vertex _ _.
 case/boolP: (i' == b) => bi; first by rewrite /exists_edges_path bi.
-have [qh [qt Hqht]] : exists qh qt, drop pij q = qh :: qt.
-  move: Hb; rewrite Hq0; clear -bi.
-  case: (drop pij q) => [| qh qt] /=; last by exists qh, qt.
-  by rewrite eq_sym (negbTE bi).
-have Hq : is_edges_path [tuple of l ++ [:: (i, j)]] i' b qh qt.
-  rewrite /is_edges_path.
-  move: Hq2 Hb; rewrite Hqht /= Hq0 => /andP[].
-  by rewrite -/i' => -> -> ->.
-case: (is_edges_path_weaken Hq).
-  rewrite -Hqht /= Hu2 andbT.
+have /nnilP [qh [qt Hqt]]: size (drop pij q) > 0.
+  by rewrite lt0n; apply/nilP => Hsz; move: bi; rewrite (eqP Hb) Hq0 Hsz eqxx.
+have : is_edges_path l' i' b qh qt.
+  by move: Hq2 Hb; rewrite /is_edges_path Hqt /= Hq0 -/i' => -> ->.
+case/is_edges_path_weaken.
+  rewrite -Hqt /= Hu2 andbT.
   apply: contra Hu12 => Hu0.
   apply/hasP; exists (rshift n ord0) => //.
   rewrite [_ ++ _](take_nth q0 Hpij) [unzip1 _]map_rcons mem_rcons.
   by rewrite Hnth in_cons eqxx.
-move=> q0' [q' [qq' Hq']].
-exact: (is_edges_path_exists Hq').
+by move=> q0' [q'] [qq'] /is_edges_path_exists.
 Qed.
 
 End symfingraph.
