@@ -603,7 +603,7 @@ Qed.
 HB.instance Definition _ := isMonad.Build M bindE joinretM joinMret joinA.
 HB.end.
 
-Notation "'do' x <- m ; e" := (bind m (fun x => e)) (only parsing) : do_notation.
+Notation "'do' x <- m ; e" := (bind m (fun x => e)) : do_notation.
 Notation "'do' x : T <- m ; e" :=
   (bind m (fun x : T => e)) (only parsing) : do_notation.
 Delimit Scope do_notation with Do.
@@ -1296,22 +1296,23 @@ HB.structure Definition MonadPlusArray (S : UU0) (I : eqType) :=
 
 Module UnionFind.
 Local Definition I := nat.
+Local Open Scope do_notation.
 
 HB.mixin Record isMonadUnion (M : UU0 -> UU0)
     of MonadEquiv M:= {
   find : I -> M I ;
   union : I -> I -> M unit ;
   findfind : forall (A : UU0) i (k : I -> I -> M A),
-    (find i >>= fun r => find i >>= k r) ≈
-    (find i >>= fun r => k r r) ;
+    (do r <- find i; do r' <- find i; k r r') ≈
+    (do r <- find i; k r r) ;
   unionfind : forall i j, (union i j >> find i) ≈ (union i j >> find j) ;
   findunion : forall i j, (find j >>= union i) ≈ (union i j) ;
   findunionfind : forall i j u,
-    (find u >>= fun v => union i j >> find v) ≈ (union i j >> find u) ;
+    (do v <- find u; union i j >> find v) ≈ (union i j >> find u) ;
   union_refl : forall i, union i i ≈ skip ;
   findC : forall (A : UU0) i j (k : I -> I -> M A),
-    (find i >>= fun u => find j >>= k u) ≈
-    (find j >>= fun v => find i >>= k ^~ v) ;
+    (do u <- find i; do v <- find j; k u v) ≈
+    (do v <- find j; do u <- find i; k u v) ;
   union_sym : forall i j, union i j ≈ union j i;
   unionC : forall i j u v,
     (union i j >> union u v) ≈ (union u v >> union i j) ;
@@ -1324,15 +1325,15 @@ HB.structure Definition MonadUnion :=
   { M of isMonadUnion M & }.
 
 Definition eqfind (M : unionMonad) a b :=
-  @find M a >>= fun a' => find b >>= fun b' => Ret (a' == b').
+  do a' <- @find M a; do b' <- find b; Ret (a' == b').
 
 HB.mixin Record isMonadUnionFail (M : UU0 -> UU0)
     of MonadUnion M & MonadFail M := {
   neqfind : I -> I -> M unit;
   neqfindE : forall a b, neqfind a b = @eqfind M a b >>= (guard \o negb);
   findunion_neq : forall A i j a (k : I -> M A), 
-    (neqfind a i >> neqfind a j >> union i j >> find a >>= k) ≈
-    (neqfind a i >> neqfind a j >> find a >>= fun a' => union i j >> k a'); 
+    (neqfind a i >> neqfind a j >> union i j >> do a' <- find a; k a') ≈
+    (neqfind a i >> neqfind a j >> do a' <- find a; union i j >> k a'); 
   findunion_eq : forall i j, 
     (do i' <- find i; do j' <- find j; union i j >> do r <- find i; 
       @guard M ( (i' == r) || (j' == r)))%Do ≈ union i j;

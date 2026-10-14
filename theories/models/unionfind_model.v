@@ -12,6 +12,7 @@ Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
 Local Open Scope monae_scope.
+Local Open Scope do_notation.
 
 Module ModelUnion.
 Section modelunion.
@@ -1079,8 +1080,8 @@ Proof.
 Qed.
 
 Let findunion_neq A  i j a (k : I-> M A ): 
-  (neqfind a i>>neqfind a j>> union i j>> find a >>= k) ≈
-  (neqfind a i>> neqfind a j>> find a >>= fun a'=> union i j>> k a').
+  (neqfind a i>>neqfind a j>> union i j >> do a' <- find a ; k a') ≈
+  (neqfind a i>> neqfind a j>> do a' <- find a ; union i j >> k a').
 Proof.
   rewrite !neqfindE.
   apply eq_is_bisim, boolp.eq_exist, boolp.funext => f/=.
