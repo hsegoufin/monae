@@ -73,14 +73,15 @@ Proof. by setoid_rewrite union_sym; rewrite findunion. Qed.
 Lemma finddup A i (m : _ ->_ -> M A) :
   do x <- find i; do x' <- find x; m x x' ≈ do x <- find i; m x x.
 Proof.
+symmetry.
 rewrite -findfind.
-rewrite -[eqvLHS](findfind _ i (fun i1 i2 => find i2 >>= m i1)).
-rewrite [eqvRHS]findC.
-rewrite -{3}(bindskipf (find i)) -(union_refl i) -findunionfind !bindA.
+rewrite -{2}(bindskipf (find i)).
+setoid_rewrite <-(union_refl i).
+setoid_rewrite <-findunionfind.
 setoid_rewrite union_refl.
-setoid_rewrite bindretf.
-rewrite findC.
-by setoid_rewrite (findC _ i _ m).
+under eq_bind do rewrite bindA.
+setoid_rewrite bindskipf.
+by setoid_rewrite findfind.
 Qed.
 
 Lemma uniondup i j : @union M i j >> union i j ≈ union i j.
