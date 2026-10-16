@@ -175,8 +175,6 @@ HB.mixin Record isFunctor (F : UU0 -> UU0) := {
 #[short(type=functor)]
 HB.structure Definition Functor := {F of isFunctor F}.
 
-
-
 Notation "F # g" := (@actm F _ _ g) : monae_scope.
 Notation "'fmap' f" := (_ # f) : mprog.
 
@@ -325,8 +323,6 @@ Arguments ret {_}.
 Arguments join {A}.
 
 Definition left_unit := forall A, join \o ret = id :> (F A -> F A).
-
-
 
 Definition right_unit := forall A, join \o F # ret = id :> (F A -> F A).
 
