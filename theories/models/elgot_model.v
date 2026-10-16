@@ -185,8 +185,10 @@ by apply: bindfwB => -[[?|?] ?];
   rewrite /=bindretf !compE/= fmapE !bindretf/= !compE/= fmapE bindretf.
 Qed.
 
-HB.instance Definition _ := @hasWBisim.Build elgotS wB
-  (@refl) (@sym) (@trans) (@bindl) (@bindr).
+HB.instance Definition _ := @hasPreorder.Build elgotS wB
+  (@refl) (@trans) (@bindl) (@bindr).
+
+HB.instance Definition _ := @hasEquivalence.Build elgotS (@sym).
 
 HB.instance Definition _ := @isMonadElgot.Build elgotS (@while)
   (@whilel) (@fixpoint) (@naturality) (@codiagonal) (@uniform).
@@ -235,7 +237,7 @@ Proof. by rewrite{1}/bind/=/bindX. Qed.
 
 Lemma bindl {A B} (f : A -> elgotX B) (d1 d2 : elgotX A) :
   d1 ≈ d2 -> d1 >>= f ≈ d2 >>= f.
-Proof. by move => Hd12; rewrite bindXE (bindmwB _ _ _ _ _ Hd12). Qed.
+Proof. by move => Hd12; rewrite bindXE (bindmwB Hd12). Qed.
 
 Lemma bindr {A B} (f g : A -> elgotX B) (d : elgotX A) :
   (forall a, f a ≈ g a) -> d >>= f ≈ d >>= g.
@@ -244,7 +246,7 @@ move => H.
 rewrite! bindXE.
 set f' := fun c => _.
 set g' := fun c => _.
-rewrite (bindfwB _ _ f' g') // => a.
+rewrite (bindfwB (g:=g')) // => a.
 subst f' g'.
 by case: a.
 Qed.
@@ -253,7 +255,7 @@ Lemma fixpoint {A B} (f : A -> elgotX (B + A)) (a : A) :
   while f a ≈ f a >>= sum_rect (fun => elgotX B ) Ret (while f).
 Proof.
 rewrite /while /elgotXA fixpointwB /= !compE/= fmapE /= bindA.
-apply (bindfwB _ _ _ _ (f a)) => uba.
+apply (bindfwB (d:=f a)) => uba.
 by case: uba => [u|[b'|a']] /=; rewrite bindretf.
 Qed.
 
@@ -266,7 +268,7 @@ Proof.
 rewrite /while /elgotXA bindXE naturalitywB.
 apply: whilewB => a' /=.
 rewrite !compE/= 2!fmapE !bindA.
-apply: (bindfwB _ _ _ _ (f a')).
+apply: (bindfwB (d:=f a')).
 move=> [u|[b''|a'']] /=.
 - by rewrite !bindretf/= compE/= fmapE bindretf.
 - rewrite !bindretf/= !compE/= fmapE /= fmapE bindA.
@@ -320,8 +322,10 @@ Qed.
 
 HB.instance Definition _ := MonadExcept.on elgotX.
 
-HB.instance Definition _ := @hasWBisim.Build elgotX (@wB)
-  refl sym trans (@bindl) (@bindr).
+HB.instance Definition _ := @hasPreorder.Build elgotX (@wB)
+  refl trans (@bindl) (@bindr).
+
+HB.instance Definition _ := @hasEquivalence.Build elgotX sym.
 
 HB.instance Definition _ := @isMonadElgot.Build elgotX (@while)
   (@whilel) (@fixpoint) (@naturality) (@codiagonal) (@uniform).
